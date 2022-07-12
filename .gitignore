@@ -4,6 +4,7 @@
 # Custom
 *.idea
 /app
+/versions
 
 # User-specific files
 *.suo
