@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using AiCup22.Model;
 
 namespace AiCup22.Strategy;
@@ -10,7 +11,7 @@ public class Context
 
     public Unit MyUnit;
 
-    public readonly List<MyLoot> Items = new();
+    public readonly Dictionary<int, MyLoot> Items = new();
 
     public Context(Constants constants)
     {
@@ -19,8 +20,6 @@ public class Context
 
     public void Init(Game game)
     {
-        Items.Clear();
-
         foreach (Unit unit in game.Units)
         {
             if (unit.PlayerId != game.MyId)
@@ -30,6 +29,8 @@ public class Context
 
             MyUnit = unit;
         }
+
+        RemoveDisappearedLoot(game);
 
         foreach (Loot loot in game.Loot)
         {
@@ -85,15 +86,46 @@ public class Context
                     break;
             }
 
-            var distanceSquaredToZoneCenter = Calc.DistanceSquared(loot.Position, game.Zone.CurrentCenter);
-            item.DistanceSquaredToZoneCenter = distanceSquaredToZoneCenter;
-            item.InZone = distanceSquaredToZoneCenter <= game.Zone.CurrentRadius * game.Zone.CurrentRadius;
+            Items[item.Id] = item;
+        }
 
-            var distanceSquaredToMyUnit = Calc.DistanceSquared(loot.Position, MyUnit.Position);
-            item.DistanceSquaredToMyUnit = distanceSquaredToMyUnit;
-            item.InMyUnit = distanceSquaredToMyUnit <= _constants.UnitRadius * _constants.UnitRadius;
+        foreach (var item in Items.Values)
+        {
+            var myLoot = item;
 
-            Items.Add(item);
+            var distanceSquaredToZoneCenter = Calc.DistanceSquared(myLoot.Position, game.Zone.CurrentCenter);
+            myLoot.DistanceSquaredToZoneCenter = distanceSquaredToZoneCenter;
+            myLoot.InZone = distanceSquaredToZoneCenter <= game.Zone.CurrentRadius * game.Zone.CurrentRadius;
+
+            var distanceSquaredToMyUnit = Calc.DistanceSquared(myLoot.Position, MyUnit.Position);
+            myLoot.DistanceSquaredToMyUnit = distanceSquaredToMyUnit;
+            myLoot.InMyUnit = distanceSquaredToMyUnit <= _constants.UnitRadius * _constants.UnitRadius;
+
+            Items[item.Id] = myLoot;
+        }
+    }
+
+    private void RemoveDisappearedLoot(Game game)
+    {
+        var removedItems = new List<int>();
+        foreach (var item in Items.Values)
+        {
+            var directionVec = Calc.VecMultiply(MyUnit.Direction, _constants.ViewDistance);
+
+            bool isInSector = Calc.IsInSector(directionVec, Calc.VecDiff(MyUnit.Position, item.Position));
+            if (isInSector)
+            {
+                bool disappeared = game.Loot.All(i => i.Id != item.Id);
+                if (disappeared)
+                {
+                    removedItems.Add(item.Id);
+                }
+            }
+        }
+
+        foreach (var removedId in removedItems)
+        {
+            Items.Remove(removedId);
         }
     }
 }

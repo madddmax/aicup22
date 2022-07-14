@@ -27,4 +27,20 @@ public static class Calc
     {
         return new Vec2(p1.X * k, p1.Y * k);
     }
+
+    public static double ToRad(Vec2 p)
+    {
+        return Math.Atan2(p.Y, p.X);
+    }
+
+    public static double ToRad(double angle)
+    {
+        return angle * Math.PI / 180;
+    }
+
+    public static bool IsInSector(Vec2 p1, Vec2 p2) {
+        var rq0 = p1.X*p1.X + p1.Y*p1.Y;
+        var rq = p2.X*p2.X + p2.Y*p2.Y;
+        return rq0 >= rq && (p1.X*p2.X + p1.Y*p2.Y)/Math.Sqrt(rq0*rq) >= Math.Cos(60.0/180.0*Math.PI);
+    }
 }

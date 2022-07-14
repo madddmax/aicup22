@@ -27,6 +27,12 @@ public class MyStrategy
 
         _context.Init(game);
 
+        ////
+
+        //Debug.DrawViewPie(debugInterface, _context.MyUnit);
+
+        ////
+
         Vec2 target;
         ActionOrder action = null;
 
@@ -36,9 +42,16 @@ public class MyStrategy
             action = new ActionOrder.UseShieldPotion();
         }
 
+        foreach (var item in _context.Items.Values)
+        {
+            Debug.DrawCircle(debugInterface, item.Position);
+        }
+
+        Debug.DrawText(debugInterface, _context.MyUnit.Position, _context.MyUnit.ShieldPotions.ToString());
+
         if (_context.MyUnit.ShieldPotions < _constants.MaxShieldPotionsInInventory)
         {
-            MyLoot potion = _context.Items
+            MyLoot potion = _context.Items.Values
                 .Where(i =>
                     i.InZone &&
                     i.Type == MyLootType.ShieldPotion
@@ -53,6 +66,7 @@ public class MyStrategy
 
                 if (potion.InMyUnit)
                 {
+                    _context.Items.Remove(potion.Id);
                     action = new ActionOrder.Pickup(potion.Id);
                 }
                 else
@@ -94,19 +108,6 @@ public class MyStrategy
     public void DebugUpdate(int displayedTick, DebugInterface debugInterface)
     {
         return;
-
-        debugInterface.Clear();
-
-        double size = 0.5;
-        var alignment = new Vec2(0, 1);
-
-        debugInterface.AddPlacedText(
-            _context.MyUnit.Position,
-            displayedTick.ToString(),
-            alignment,
-            size,
-            new Debugging.Color(0, 0, 0, 200)
-        );
     }
 
     public void Finish() {}
