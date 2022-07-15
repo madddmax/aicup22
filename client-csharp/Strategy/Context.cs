@@ -12,10 +12,17 @@ public class Context
     public Unit MyUnit;
 
     public readonly Dictionary<int, MyLoot> Items = new();
+    public readonly Dictionary<int, MyObstacle> Obstacles;
 
     public Context(Constants constants)
     {
         _constants = constants;
+
+        Obstacles = new Dictionary<int, MyObstacle>(_constants.Obstacles.Length);
+        foreach (var obstacle in _constants.Obstacles)
+        {
+            Obstacles.Add(obstacle.Id, new MyObstacle(obstacle));
+        }
     }
 
     public void Init(Game game)
@@ -31,7 +38,47 @@ public class Context
         }
 
         RemoveDisappearedLoot(game);
+        AddOrUpdateLoot(game);
+        UpdateDistanceToLoot(game);
 
+        foreach (var obstacle in Obstacles.Values)
+        {
+            var myObstacle = obstacle;
+
+            var distanceSquaredToMyUnit = Calc.DistanceSquared(myObstacle.Position, MyUnit.Position);
+            myObstacle.DistanceSquaredToMyUnit = distanceSquaredToMyUnit;
+            myObstacle.InMyUnit = distanceSquaredToMyUnit <= _constants.UnitRadius * _constants.UnitRadius;
+
+            Obstacles[obstacle.Id] = myObstacle;
+        }
+    }
+
+    private void RemoveDisappearedLoot(Game game)
+    {
+        var removedItems = new List<int>();
+        foreach (var item in Items.Values)
+        {
+            var directionVec = Calc.VecMultiply(MyUnit.Direction, _constants.ViewDistance);
+
+            bool isInSector = Calc.IsInSector(directionVec, Calc.VecDiff(MyUnit.Position, item.Position));
+            if (isInSector)
+            {
+                bool disappeared = game.Loot.All(i => i.Id != item.Id);
+                if (disappeared)
+                {
+                    removedItems.Add(item.Id);
+                }
+            }
+        }
+
+        foreach (var removedId in removedItems)
+        {
+            Items.Remove(removedId);
+        }
+    }
+
+    private void AddOrUpdateLoot(Game game)
+    {
         foreach (Loot loot in game.Loot)
         {
             var item = new MyLoot
@@ -88,7 +135,10 @@ public class Context
 
             Items[item.Id] = item;
         }
+    }
 
+    private void UpdateDistanceToLoot(Game game)
+    {
         foreach (var item in Items.Values)
         {
             var myLoot = item;
@@ -102,30 +152,6 @@ public class Context
             myLoot.InMyUnit = distanceSquaredToMyUnit <= _constants.UnitRadius * _constants.UnitRadius;
 
             Items[item.Id] = myLoot;
-        }
-    }
-
-    private void RemoveDisappearedLoot(Game game)
-    {
-        var removedItems = new List<int>();
-        foreach (var item in Items.Values)
-        {
-            var directionVec = Calc.VecMultiply(MyUnit.Direction, _constants.ViewDistance);
-
-            bool isInSector = Calc.IsInSector(directionVec, Calc.VecDiff(MyUnit.Position, item.Position));
-            if (isInSector)
-            {
-                bool disappeared = game.Loot.All(i => i.Id != item.Id);
-                if (disappeared)
-                {
-                    removedItems.Add(item.Id);
-                }
-            }
-        }
-
-        foreach (var removedId in removedItems)
-        {
-            Items.Remove(removedId);
         }
     }
 }
