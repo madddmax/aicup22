@@ -65,10 +65,22 @@ public class MyStrategy
 
             if (potion != default)
             {
-                if (potion.InMyUnit)
+                if (potion.InMyUnit && _context.MyUnit.Action == null)
                 {
-                    // todo может остаться ещё amount от предмета // ремовить когда подниму
-                    //_context.Items.Remove(potion.Id);
+                    var potionDiff = _context.MyUnit.ShieldPotions + potion.Amount -
+                                     _constants.MaxShieldPotionsInInventory;
+
+                    if (potionDiff <= 0)
+                    {
+                        _context.Items.Remove(potion.Id);
+                    }
+                    else
+                    {
+                        var contextItem = _context.Items[potion.Id];
+                        contextItem.Amount = potionDiff;
+                        _context.Items[potion.Id] = contextItem;
+                    }
+
                     action = new ActionOrder.Pickup(potion.Id);
                 }
 
@@ -76,12 +88,6 @@ public class MyStrategy
                 randomMove = false;
             }
         }
-
-        List<MyObstacle> nearestObstacles =
-            _context.Obstacles.Values
-                .OrderBy(i => i.DistanceSquaredToMyUnit)
-                .Take(10)
-                .ToList();
 
         var radius = MaxObstaclesRadius + _constants.UnitRadius;
         bool nearPosition = Calc.InsideCircle(_context.MyUnit.Position, _movePosition, radius);
@@ -100,21 +106,49 @@ public class MyStrategy
 
 
         // todo рэндомить движение при обсчете столкновения + нужно вычислять новую поближе к цели!
-        for (int i = 0; i < 24; i++)
+
+        target = FindPath(debugInterface, target);
+
+        orders.Add(
+            _context.MyUnit.Id,
+            new UnitOrder(target, target, action)
+        );
+
+        return new Order(orders);
+    }
+
+    private Vec2 FindPath(DebugInterface debugInterface, Vec2 target)
+    {
+        List<MyObstacle> nearestObstacles =
+            _context.Obstacles.Values
+                .OrderBy(i => i.DistanceSquaredToMyUnit)
+                .Take(10)
+                .ToList();
+
+        double fullAngle = 360;
+        double simAngle = 15;
+
+        for (int i = 0; i < fullAngle / simAngle; i++)
         {
             var newMyPosition = _context.MyUnit.Position;
 
             bool insideObstacle = false;
-            var simulationVec = Calc.Normalize(target);
-            simulationVec = Calc.VecMultiply(simulationVec, _constants.MaxUnitForwardSpeed / 10);
-            simulationVec = Calc.Rotate(simulationVec, 15 * i);
 
-            // _constants.TicksPerSecond
-            for (int halfTick = 0; halfTick < 2 * 10; halfTick++)
+            int simulationTicks = 2;
+            int ticksDivider = 10;
+            int dividedTick = 1;
+
+            double simSpeed = _constants.MaxUnitForwardSpeed / ticksDivider;
+
+            var simulationVec = Calc.Normalize(target);
+            simulationVec = Calc.VecMultiply(simulationVec, simSpeed);
+            simulationVec = Calc.Rotate(simulationVec, simAngle * i);
+
+            for (; dividedTick <= simulationTicks * ticksDivider; dividedTick++)
             {
                 newMyPosition = Calc.VecAdd(newMyPosition, simulationVec);
 
-                bool nearPosition2 = Calc.InsideCircle(newMyPosition, _movePosition, _constants.UnitRadius/4);
+                bool nearPosition2 = Calc.InsideCircle(newMyPosition, _movePosition, _constants.UnitRadius / ticksDivider);
                 if (nearPosition2)
                 {
                     break;
@@ -140,21 +174,16 @@ public class MyStrategy
 
             if (!insideObstacle)
             {
-                // todo считать скорость для достижения точки
                 target = simulationVec;
+                target = Calc.VecMultiply(target, simSpeed * dividedTick);
+
+                var blue = new Color(0, 0, 200, 100);
+                Debug.DrawLine(debugInterface, _context.MyUnit.Position, newMyPosition, blue);
                 break;
             }
         }
 
-
-        target = Calc.VecMultiply(target, _constants.MaxUnitForwardSpeed);
-
-        orders.Add(
-            _context.MyUnit.Id,
-            new UnitOrder(target, target, action)
-        );
-
-        return new Order(orders);
+        return target;
     }
 
     public void DebugUpdate(int displayedTick, DebugInterface debugInterface)
