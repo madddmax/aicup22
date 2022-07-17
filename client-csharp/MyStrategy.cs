@@ -107,11 +107,11 @@ public class MyStrategy
 
         // todo рэндомить движение при обсчете столкновения + нужно вычислять новую поближе к цели!
 
-        target = FindPath(debugInterface, target);
+        var pathTarget = FindPath(debugInterface, target);
 
         orders.Add(
             _context.MyUnit.Id,
-            new UnitOrder(target, target, action)
+            new UnitOrder(pathTarget, target, action)
         );
 
         return new Order(orders);
@@ -126,41 +126,83 @@ public class MyStrategy
                 .ToList();
 
         double fullAngle = 360;
-        double simAngle = 15;
+        double simAngle = 15; // класс для вычисления лучшей позиции со score
 
-        for (int i = 0; i < fullAngle / simAngle; i++)
+        int simulationTicks = 30;
+        double ticksDivider = 10;
+        double simSpeed = _constants.MaxUnitForwardSpeed / ticksDivider;
+
+        for (int i = 0; i < (fullAngle / simAngle) - 1; i++)
         {
-            var newMyPosition = _context.MyUnit.Position;
+            var angle = simAngle * i;
 
             bool insideObstacle = false;
-
-            int simulationTicks = 2;
-            int ticksDivider = 10;
-            int dividedTick = 1;
-
-            double simSpeed = _constants.MaxUnitForwardSpeed / ticksDivider;
+            bool hit = false;
+            var newMyPosition = _context.MyUnit.Position;
 
             var simulationVec = Calc.Normalize(target);
             simulationVec = Calc.VecMultiply(simulationVec, simSpeed);
-            simulationVec = Calc.Rotate(simulationVec, simAngle * i);
+            simulationVec = Calc.Rotate(simulationVec, angle);
 
+
+            int dividedTick = 1;
             for (; dividedTick <= simulationTicks * ticksDivider; dividedTick++)
             {
                 newMyPosition = Calc.VecAdd(newMyPosition, simulationVec);
 
-                bool nearPosition2 = Calc.InsideCircle(newMyPosition, _movePosition, _constants.UnitRadius / ticksDivider);
-                if (nearPosition2)
+                foreach (var projectile in _context.Projectiles.Values)
+                {
+                    var baseProjectileVelocity = Calc.VecDiv(projectile.Velocity, ticksDivider);
+
+                    Vec2 simProjectileVelocity;
+                    Vec2 projectilePosition1;
+                    if (dividedTick == 1)
+                    {
+                        projectilePosition1 = projectile.Position;
+                    }
+                    else
+                    {
+                        simProjectileVelocity = Calc.VecMultiply(baseProjectileVelocity, dividedTick - 1);
+                        projectilePosition1 = Calc.VecAdd(projectile.Position, simProjectileVelocity);
+                    }
+
+                    simProjectileVelocity = Calc.VecMultiply(baseProjectileVelocity, dividedTick);
+                    var projectilePosition2 = Calc.VecAdd(projectile.Position, simProjectileVelocity);
+
+                    hit = Calc.IntersectCircleLine(projectilePosition1, projectilePosition2, newMyPosition,
+                        _constants.UnitRadius * 1.1);
+
+                    if (hit)
+                    {
+                        break;
+                    }
+                }
+
+
+                if (hit)
+                {
+                    var green = new Color(0, 200, 0, 100);
+                    Debug.DrawLine(debugInterface, _context.MyUnit.Position, newMyPosition, green);
+                    break;
+                }
+
+                bool inPosition = Calc.InsideCircle(newMyPosition, _movePosition,
+                    _constants.UnitRadius / ticksDivider);
+                if (inPosition)
                 {
                     break;
                 }
 
-                foreach (var obstacle in nearestObstacles)
+                if (dividedTick < ticksDivider / 2)
                 {
-                    var r = obstacle.Radius + _constants.UnitRadius;
-                    insideObstacle = Calc.InsideCircle(newMyPosition, obstacle.Position, r);
-                    if (insideObstacle)
+                    foreach (var obstacle in nearestObstacles)
                     {
-                        break;
+                        var r = obstacle.Radius + _constants.UnitRadius;
+                        insideObstacle = Calc.InsideCircle(newMyPosition, obstacle.Position, r);
+                        if (insideObstacle)
+                        {
+                            break;
+                        }
                     }
                 }
 
@@ -172,7 +214,7 @@ public class MyStrategy
                 }
             }
 
-            if (!insideObstacle)
+            if (!insideObstacle && !hit)
             {
                 target = simulationVec;
                 target = Calc.VecMultiply(target, simSpeed * dividedTick);

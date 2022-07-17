@@ -13,6 +13,9 @@ public class Context
 
     public readonly Dictionary<int, MyLoot> Items = new();
     public readonly Dictionary<int, MyObstacle> Obstacles;
+    public readonly Dictionary<int, MyProjectile> Projectiles = new();
+    public readonly Dictionary<int, MyUnit> EnemyUnits = new();
+    public readonly Dictionary<int, MyUnit> Units = new();
 
     public Context(Constants constants)
     {
@@ -29,12 +32,16 @@ public class Context
     {
         foreach (Unit unit in game.Units)
         {
-            if (unit.PlayerId != game.MyId)
+            var bot = new MyUnit(unit, game.CurrentTick);
+            if (bot.PlayerId != game.MyId)
             {
-                continue;
+                EnemyUnits[bot.Id] = bot;
             }
-
-            MyUnit = unit;
+            else
+            {
+                Units[bot.Id] = bot;
+                MyUnit = unit;
+            }
         }
 
         RemoveDisappearedLoot(game);
@@ -51,6 +58,45 @@ public class Context
 
             Obstacles[obstacle.Id] = myObstacle;
         }
+
+        AddOrUpdateProjectiles(game);
+    }
+
+    private void AddOrUpdateProjectiles(Game game)
+    {
+        foreach (var projectile in game.Projectiles)
+        {
+            var myProjectile = new MyProjectile(projectile, game.CurrentTick);
+            Projectiles[projectile.Id] = myProjectile;
+        }
+
+        var removedItems = new List<int>();
+        foreach (MyProjectile projectile in Projectiles.Values)
+        {
+            if (projectile.CurrentTick == game.CurrentTick)
+            {
+                continue;
+            }
+
+            var myProjectile = projectile;
+
+            // todo collision with obstacles
+            myProjectile.Position = Calc.VecAdd(myProjectile.Position, myProjectile.Velocity);
+            int ticksToRemove = (int)Math.Ceiling(myProjectile.LifeTime * _constants.TicksPerSecond);
+            if (projectile.CurrentTick + ticksToRemove >= game.CurrentTick)
+            {
+                Projectiles[projectile.Id] = myProjectile;
+            }
+            else
+            {
+                removedItems.Add(myProjectile.Id);
+            }
+        }
+
+        foreach (var removedId in removedItems)
+        {
+            Projectiles.Remove(removedId);
+        }
     }
 
     private void RemoveDisappearedLoot(Game game)
@@ -60,7 +106,8 @@ public class Context
         {
             var directionVec = Calc.VecMultiply(MyUnit.Direction, _constants.ViewDistance);
 
-            bool isInSector = Calc.IsInSector(directionVec, Calc.VecDiff(MyUnit.Position, item.Position));
+            bool isInSector = Calc.IsInSector(directionVec, Calc.VecDiff(MyUnit.Position, item.Position),
+                _constants.FieldOfView);
             if (isInSector)
             {
                 bool disappeared = game.Loot.All(i => i.Id != item.Id);

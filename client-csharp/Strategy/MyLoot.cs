@@ -23,9 +23,7 @@ public struct MyLoot : IEquatable<MyLoot>
 
     public bool Equals(MyLoot other)
     {
-        return Id == other.Id && Position.Equals(other.Position) && Type == other.Type && Amount == other.Amount &&
-               DistanceSquaredToZoneCenter.Equals(other.DistanceSquaredToZoneCenter) && InZone == other.InZone &&
-               DistanceSquaredToMyUnit.Equals(other.DistanceSquaredToMyUnit) && InMyUnit == other.InMyUnit;
+        return Id == other.Id;
     }
 
     public override bool Equals(object obj)
@@ -35,8 +33,7 @@ public struct MyLoot : IEquatable<MyLoot>
 
     public override int GetHashCode()
     {
-        return HashCode.Combine(Id, Position, (int) Type, Amount, DistanceSquaredToZoneCenter, InZone,
-            DistanceSquaredToMyUnit, InMyUnit);
+        return HashCode.Combine(Id);
     }
 
     public static bool operator ==(MyLoot left, MyLoot right)
