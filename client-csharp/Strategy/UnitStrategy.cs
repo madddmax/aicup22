@@ -4,12 +4,16 @@ namespace AiCup22.Strategy;
 
 public struct UnitStrategy
 {
+    public int UnitId { get; set; }
     public StrategyState State { get; set; }
     public Vec2 MovePosition { get; set; }
+    public int PickupLootId { get; set; }
 
-    public UnitStrategy()
+    public UnitStrategy(int unitId)
     {
+        UnitId = unitId;
         State = StrategyState.RandomMove;
         MovePosition = new Vec2(0, 0);
+        PickupLootId = 0;
     }
 }

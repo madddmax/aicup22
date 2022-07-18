@@ -32,8 +32,6 @@ public struct MyObstacle
 
     public Dictionary<int, double> DistanceSquaredToMyUnit { get; set; }
 
-    public Dictionary<int, bool> InMyUnit { get; set; }
-
     public MyObstacle(Obstacle obstacle)
     {
         Id = obstacle.Id;
@@ -42,6 +40,5 @@ public struct MyObstacle
         CanSeeThrough = obstacle.CanSeeThrough;
         CanShootThrough = obstacle.CanShootThrough;
         DistanceSquaredToMyUnit = new Dictionary<int, double>();
-        InMyUnit = new Dictionary<int, bool>();
     }
 }

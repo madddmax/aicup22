@@ -33,10 +33,13 @@ public class MyStrategy
         {
             if (!_unitStrategies.ContainsKey(unit.Id))
             {
-                _unitStrategies.Add(unit.Id, new UnitStrategy());
+                _unitStrategies.Add(unit.Id, new UnitStrategy(unit.Id));
             }
 
             var unitStrategy = _unitStrategies[unit.Id];
+            unitStrategy.State = StrategyState.RandomMove;
+            Debug.DrawText(debugInterface, unit.Position, unit.ShieldPotions.ToString());
+
             ActionOrder action = null;
 
             if (unit.ShieldPotions > 0 &&
@@ -45,21 +48,18 @@ public class MyStrategy
                 action = new ActionOrder.UseShieldPotion();
             }
 
-            foreach (var item in _context.Items.Values)
-            {
-                Debug.DrawCircle(debugInterface, item.Position);
-            }
-
-            Debug.DrawText(debugInterface, unit.Position, unit.ShieldPotions.ToString());
-
-            unitStrategy.State = StrategyState.RandomMove;
-
             if (unit.ShieldPotions < _constants.MaxShieldPotionsInInventory)
             {
+                List<int> currentPickedUp = _unitStrategies.Values
+                    .Where(s => s.UnitId != unit.Id)
+                    .Select(s => s.PickupLootId)
+                    .ToList();
+
                 MyLoot potion = _context.Items.Values
                     .Where(i =>
                         i.InZone &&
-                        i.Type == MyLootType.ShieldPotion
+                        i.Type == MyLootType.ShieldPotion &&
+                        !currentPickedUp.Contains(i.Id)
                     )
                     .OrderBy(i => i.DistanceSquaredToMyUnit[unit.Id])
                     .FirstOrDefault();
@@ -85,6 +85,7 @@ public class MyStrategy
 
                     unitStrategy.MovePosition = potion.Position;
                     unitStrategy.State = StrategyState.PickupPotion;
+                    unitStrategy.PickupLootId = potion.Id;
                     _unitStrategies[unit.Id] = unitStrategy;
                 }
             }
@@ -134,18 +135,18 @@ public class MyStrategy
         {
             var angle = simAngle * i;
 
-            bool insideObstacle = false;
+            bool obstacleCollision = false;
+            bool unitCollision = false;
             bool hit = false;
             var newMyPosition = unit.Position;
 
             var simulationVec = Calc.Normalize(target);
-            var speedModifier = GetSpeedModifier(unit.Direction, simulationVec);
-            var speedModifier2 = GetSpeedModifier(unit.Velocity, simulationVec);
+            var directionModifier = GetSpeedModifier(unit.Direction, simulationVec);
+            var velocityModifier = GetSpeedModifier(unit.Velocity, simulationVec);
 
-            double simSpeed = (_constants.MaxUnitForwardSpeed * speedModifier * speedModifier2) / ticksDivider;
+            double simSpeed = (_constants.MaxUnitForwardSpeed * directionModifier * velocityModifier) / ticksDivider;
             simulationVec = Calc.VecMultiply(simulationVec, simSpeed);
             simulationVec = Calc.Rotate(simulationVec, angle);
-
 
             int dividedTick = 1;
             for (; dividedTick <= simulationTicks * ticksDivider; dividedTick++)
@@ -199,15 +200,30 @@ public class MyStrategy
                     foreach (var obstacle in nearestObstacles)
                     {
                         var r = obstacle.Radius + _constants.UnitRadius;
-                        insideObstacle = Calc.InsideCircle(newMyPosition, obstacle.Position, r);
-                        if (insideObstacle)
+                        obstacleCollision = Calc.InsideCircle(newMyPosition, obstacle.Position, r);
+                        if (obstacleCollision)
+                        {
+                            break;
+                        }
+                    }
+
+                    foreach (var myUnit in _context.Units.Values)
+                    {
+                        if (myUnit.Id == unit.Id)
+                        {
+                            continue;
+                        }
+
+                        var r = _constants.UnitRadius + _constants.UnitRadius;
+                        unitCollision = Calc.InsideCircle(newMyPosition, myUnit.Position, r);
+                        if (unitCollision)
                         {
                             break;
                         }
                     }
                 }
 
-                if (insideObstacle)
+                if (obstacleCollision || unitCollision)
                 {
                     var red = new Color(200, 0, 0, 100);
                     Debug.DrawLine(debugInterface, unit.Position, newMyPosition, red);
@@ -215,7 +231,7 @@ public class MyStrategy
                 }
             }
 
-            if (!insideObstacle && !hit)
+            if (!obstacleCollision && !unitCollision && !hit)
             {
                 target = simulationVec;
                 target = Calc.VecMultiply(target, simSpeed * dividedTick);

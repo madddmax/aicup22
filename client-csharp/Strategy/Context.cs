@@ -30,28 +30,18 @@ public class Context
     {
         AddOrUpdateUnits(game);
 
-        RemoveDisappearedLoot(game);
-        AddOrUpdateLoot(game);
-
-        foreach (MyObstacle obstacle in Obstacles.Values)
-        {
-            var myObstacle = obstacle;
-
-            foreach (var unit in Units.Values)
-            {
-                var distanceSquaredToMyUnit = Calc.DistanceSquared(myObstacle.Position, unit.Position);
-                myObstacle.DistanceSquaredToMyUnit[unit.Id] = distanceSquaredToMyUnit;
-                myObstacle.InMyUnit[unit.Id] = distanceSquaredToMyUnit <= _constants.UnitRadius * _constants.UnitRadius;
-            }
-
-            Obstacles[obstacle.Id] = myObstacle;
-        }
+        UpdateDistanceToObstacle();
 
         AddOrUpdateProjectiles(game);
+
+        AddOrUpdateLoot(game);
     }
 
     private void AddOrUpdateUnits(Game game)
     {
+        RemoveEnemyUnits(game);
+        RemoveUnits(game);
+
         foreach (Unit unit in game.Units)
         {
             var bot = new MyUnit(unit, game.CurrentTick);
@@ -65,6 +55,56 @@ public class Context
             }
         }
 
+        foreach (var enemy in EnemyUnits.Values)
+        {
+            foreach (var unit in Units.Values)
+            {
+                var distanceSquaredToMyUnit = Calc.DistanceSquared(enemy.Position, unit.Position);
+                enemy.DistanceSquaredToMyUnit[unit.Id] = distanceSquaredToMyUnit;
+            }
+
+            EnemyUnits[enemy.Id] = enemy;
+        }
+
+        foreach (var unit1 in Units.Values)
+        {
+            foreach (var unit2 in Units.Values)
+            {
+                if (unit1.Id == unit2.Id)
+                {
+                    continue;
+                }
+
+                var distanceSquaredToMyUnit = Calc.DistanceSquared(unit1.Position, unit2.Position);
+                unit1.DistanceSquaredToMyUnit[unit2.Id] = distanceSquaredToMyUnit;
+            }
+
+            Units[unit1.Id] = unit1;
+        }
+    }
+
+    private void RemoveEnemyUnits(Game game)
+    {
+        EnemyUnits.Clear();
+        return;
+
+        var removedItems = new List<int>();
+        foreach (var unit in EnemyUnits.Values)
+        {
+            if (game.CurrentTick - unit.CurrentTick >= _constants.TicksPerSecond)
+            {
+                removedItems.Add(unit.Id);
+            }
+        }
+
+        foreach (var removedId in removedItems)
+        {
+            EnemyUnits.Remove(removedId);
+        }
+    }
+
+    private void RemoveUnits(Game game)
+    {
         var removedItems = new List<int>();
         foreach (var unit in Units.Values)
         {
@@ -77,6 +117,22 @@ public class Context
         foreach (var removedId in removedItems)
         {
             Units.Remove(removedId);
+        }
+    }
+
+    private void UpdateDistanceToObstacle()
+    {
+        foreach (MyObstacle obstacle in Obstacles.Values)
+        {
+            var myObstacle = obstacle;
+
+            foreach (var unit in Units.Values)
+            {
+                var distanceSquaredToMyUnit = Calc.DistanceSquared(myObstacle.Position, unit.Position);
+                myObstacle.DistanceSquaredToMyUnit[unit.Id] = distanceSquaredToMyUnit;
+            }
+
+            Obstacles[obstacle.Id] = myObstacle;
         }
     }
 
@@ -117,6 +173,34 @@ public class Context
         }
     }
 
+    private void AddOrUpdateLoot(Game game)
+    {
+        RemoveDisappearedLoot(game);
+
+        foreach (Loot loot in game.Loot)
+        {
+            var item = new MyLoot(loot);
+            Items[item.Id] = item;
+        }
+
+        foreach (var item in Items.Values)
+        {
+            var myLoot = item;
+
+            var distanceSquaredToZoneCenter = Calc.DistanceSquared(myLoot.Position, game.Zone.CurrentCenter);
+            myLoot.InZone = distanceSquaredToZoneCenter <= game.Zone.CurrentRadius * game.Zone.CurrentRadius;
+
+            foreach (var unit in Units.Values)
+            {
+                var distanceSquaredToMyUnit = Calc.DistanceSquared(myLoot.Position, unit.Position);
+                myLoot.DistanceSquaredToMyUnit[unit.Id] = distanceSquaredToMyUnit;
+                myLoot.InMyUnit[unit.Id] = distanceSquaredToMyUnit <= _constants.UnitRadius * _constants.UnitRadius;
+            }
+
+            Items[item.Id] = myLoot;
+        }
+    }
+
     private void RemoveDisappearedLoot(Game game)
     {
         var removedItems = new List<int>();
@@ -143,32 +227,6 @@ public class Context
         foreach (var removedId in removedItems)
         {
             Items.Remove(removedId);
-        }
-    }
-
-    private void AddOrUpdateLoot(Game game)
-    {
-        foreach (Loot loot in game.Loot)
-        {
-            var item = new MyLoot(loot);
-            Items[item.Id] = item;
-        }
-
-        foreach (var item in Items.Values)
-        {
-            var myLoot = item;
-
-            var distanceSquaredToZoneCenter = Calc.DistanceSquared(myLoot.Position, game.Zone.CurrentCenter);
-            myLoot.InZone = distanceSquaredToZoneCenter <= game.Zone.CurrentRadius * game.Zone.CurrentRadius;
-
-            foreach (var unit in Units.Values)
-            {
-                var distanceSquaredToMyUnit = Calc.DistanceSquared(myLoot.Position, unit.Position);
-                myLoot.DistanceSquaredToMyUnit[unit.Id] = distanceSquaredToMyUnit;
-                myLoot.InMyUnit[unit.Id] = distanceSquaredToMyUnit <= _constants.UnitRadius * _constants.UnitRadius;
-            }
-
-            Items[item.Id] = myLoot;
         }
     }
 }

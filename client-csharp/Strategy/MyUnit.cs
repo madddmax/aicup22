@@ -1,4 +1,5 @@
-﻿using AiCup22.Model;
+﻿using System.Collections.Generic;
+using AiCup22.Model;
 
 namespace AiCup22.Strategy;
 
@@ -86,6 +87,8 @@ public struct MyUnit
 
     public int CurrentTick { get; set; }
 
+    public Dictionary<int, double> DistanceSquaredToMyUnit { get; set; }
+
     public MyUnit(Unit unit, int currentTick)
     {
         Id = unit.Id;
@@ -106,5 +109,6 @@ public struct MyUnit
         ShieldPotions = unit.ShieldPotions;
 
         CurrentTick = currentTick;
+        DistanceSquaredToMyUnit = new Dictionary<int, double>();
     }
 }
