@@ -80,20 +80,36 @@ public static class Calc
 
     public static bool IntersectCircleLine(Vec2 p1, Vec2 p2, Vec2 center, double radius)
     {
-        double x01=p1.X-center.X;
-        double y01=p1.Y-center.Y;
-        double x02=p2.X-center.X;
-        double y02=p2.Y-center.Y;
+        double x01 = p1.X - center.X;
+        double y01 = p1.Y - center.Y;
+        double x02 = p2.X - center.X;
+        double y02 = p2.Y - center.Y;
 
-        double dx=x02-x01;
-        double dy=y02-y01;
+        double dx = x02 - x01;
+        double dy = y02 - y01;
 
-        double a=dx*dx+dy*dy;
-        double b=2.0f*(x01*dx+y01*dy);
-        double c=x01*x01+y01*y01-radius*radius;
+        double a = dx * dx + dy * dy;
+        double b = 2.0f * (x01 * dx + y01 * dy);
+        double c = x01 * x01 + y01 * y01 - radius * radius;
 
-        if(-b<0)return (c<0);
-        if(-b<(2.0f*a))return (4.0f*a*c-b*b<0);
-        return (a+b+c<0);
+        if (-b < 0)
+        {
+            return (c < 0);
+        }
+
+        if (-b < (2.0f * a))
+        {
+            return (4.0f * a * c - b * b < 0);
+        }
+
+        return (a + b + c < 0);
+    }
+
+    public static double AngleBetween(Vec2 p1, Vec2 p2)
+    {
+        double sin = p1.X * p2.Y - p2.X * p1.Y;
+        double cos = p1.X * p2.X + p1.Y * p2.Y;
+
+        return Math.Abs(ToDeg(Math.Atan2(sin, cos)));
     }
 }

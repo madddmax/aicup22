@@ -130,7 +130,7 @@ public class MyStrategy
 
         int simulationTicks = 30;
         double ticksDivider = 10;
-        double simSpeed = _constants.MaxUnitForwardSpeed / ticksDivider;
+
 
         for (int i = 0; i < (fullAngle / simAngle) - 1; i++)
         {
@@ -141,6 +141,10 @@ public class MyStrategy
             var newMyPosition = _context.MyUnit.Position;
 
             var simulationVec = Calc.Normalize(target);
+            var speedModifier = GetSpeedModifier(_context.MyUnit.Direction, simulationVec);
+            var speedModifier2 = GetSpeedModifier(_context.MyUnit.Velocity, simulationVec);
+
+            double simSpeed = (_constants.MaxUnitForwardSpeed * speedModifier * speedModifier2) / ticksDivider;
             simulationVec = Calc.VecMultiply(simulationVec, simSpeed);
             simulationVec = Calc.Rotate(simulationVec, angle);
 
@@ -226,6 +230,28 @@ public class MyStrategy
         }
 
         return target;
+    }
+
+    private static double GetSpeedModifier(Vec2 vec, Vec2 simVec)
+    {
+        var angleBetween = Calc.AngleBetween(vec, simVec);
+        if (angleBetween == 0)
+        {
+            return 1;
+        }
+
+        if (Math.Abs(angleBetween - 180) < 0.1)
+        {
+            return 0.5;
+        }
+
+        var reminder = angleBetween % 180 / 180;
+        if (reminder < 0.5)
+        {
+            return 1 - reminder;
+        }
+
+        return reminder;
     }
 
     public void DebugUpdate(int displayedTick, DebugInterface debugInterface)
