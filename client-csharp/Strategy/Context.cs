@@ -32,7 +32,6 @@ public class Context
 
         RemoveDisappearedLoot(game);
         AddOrUpdateLoot(game);
-        UpdateDistanceToLoot(game);
 
         foreach (MyObstacle obstacle in Obstacles.Values)
         {
@@ -151,70 +150,15 @@ public class Context
     {
         foreach (Loot loot in game.Loot)
         {
-            var item = new MyLoot
-            {
-                Id = loot.Id,
-                Position = loot.Position
-            };
-
-            switch (loot.Item)
-            {
-                case Item.Weapon weapon:
-                    switch (weapon.TypeIndex)
-                    {
-                        case 0:
-                            item.Type = MyLootType.MagicWand;
-                            item.Amount = 1;
-                            break;
-                        case 1:
-                            item.Type = MyLootType.Staff;
-                            item.Amount = 1;
-                            break;
-                        case 2:
-                            item.Type = MyLootType.Bow;
-                            item.Amount = 1;
-                            break;
-                    }
-
-                    break;
-
-                case Item.ShieldPotions potions:
-                    item.Type = MyLootType.ShieldPotion;
-                    item.Amount = potions.Amount;
-                    break;
-
-                case Item.Ammo ammo:
-                    switch (ammo.WeaponTypeIndex)
-                    {
-                        case 0:
-                            item.Type = MyLootType.MagicWandAmmo;
-                            item.Amount = ammo.Amount;
-                            break;
-                        case 1:
-                            item.Type = MyLootType.StaffAmmo;
-                            item.Amount = ammo.Amount;
-                            break;
-                        case 2:
-                            item.Type = MyLootType.BowAmmo;
-                            item.Amount = ammo.Amount;
-                            break;
-                    }
-
-                    break;
-            }
-
+            var item = new MyLoot(loot);
             Items[item.Id] = item;
         }
-    }
 
-    private void UpdateDistanceToLoot(Game game)
-    {
         foreach (var item in Items.Values)
         {
             var myLoot = item;
 
             var distanceSquaredToZoneCenter = Calc.DistanceSquared(myLoot.Position, game.Zone.CurrentCenter);
-            myLoot.DistanceSquaredToZoneCenter = distanceSquaredToZoneCenter;
             myLoot.InZone = distanceSquaredToZoneCenter <= game.Zone.CurrentRadius * game.Zone.CurrentRadius;
 
             foreach (var unit in Units.Values)
