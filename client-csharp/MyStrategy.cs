@@ -9,13 +9,13 @@ namespace AiCup22;
 
 public class MyStrategy
 {
-    private double MaxObstaclesRadius = 3;
-    private readonly Constants _constants;
-    private Context _context;
+    private const double MaxObstaclesRadius = 3;
+    private static readonly Random Random = new();
 
-    static readonly Random random = new();
-    private Vec2 _movePosition = new(0, 0);
-    private bool randomMove = false;
+    private readonly Constants _constants;
+    private readonly Context _context;
+
+    private readonly Dictionary<int, UnitStrategy> _unitStrategies = new();
 
     public MyStrategy(Constants constants)
     {
@@ -29,99 +29,98 @@ public class MyStrategy
 
         _context.Init(game);
 
-        ////
-
-        //Debug.DrawViewPie(debugInterface, _context.MyUnit);
-
-        ////
-
-        Vec2 target = game.Zone.NextCenter;
-        ActionOrder action = null;
-
-        if (_context.MyUnit.ShieldPotions > 0 &&
-            _context.MyUnit.Shield <= _constants.MaxShield - _constants.ShieldPerPotion)
+        foreach (var unit in _context.Units.Values)
         {
-            action = new ActionOrder.UseShieldPotion();
-        }
-
-        foreach (var item in _context.Items.Values)
-        {
-            Debug.DrawCircle(debugInterface, item.Position);
-        }
-
-        Debug.DrawText(debugInterface, _context.MyUnit.Position, _context.MyUnit.ShieldPotions.ToString());
-
-        randomMove = true;
-
-        if (_context.MyUnit.ShieldPotions < _constants.MaxShieldPotionsInInventory)
-        {
-            MyLoot potion = _context.Items.Values
-                .Where(i =>
-                    i.InZone &&
-                    i.Type == MyLootType.ShieldPotion
-                )
-                .OrderBy(i => i.DistanceSquaredToMyUnit)
-                .FirstOrDefault();
-
-            if (potion != default)
+            if (!_unitStrategies.ContainsKey(unit.Id))
             {
-                if (potion.InMyUnit && _context.MyUnit.Action == null)
-                {
-                    var potionDiff = _context.MyUnit.ShieldPotions + potion.Amount -
-                                     _constants.MaxShieldPotionsInInventory;
-
-                    if (potionDiff <= 0)
-                    {
-                        _context.Items.Remove(potion.Id);
-                    }
-                    else
-                    {
-                        var contextItem = _context.Items[potion.Id];
-                        contextItem.Amount = potionDiff;
-                        _context.Items[potion.Id] = contextItem;
-                    }
-
-                    action = new ActionOrder.Pickup(potion.Id);
-                }
-
-                _movePosition = potion.Position;
-                randomMove = false;
+                _unitStrategies.Add(unit.Id, new UnitStrategy());
             }
+
+            var unitStrategy = _unitStrategies[unit.Id];
+            ActionOrder action = null;
+
+            if (unit.ShieldPotions > 0 &&
+                unit.Shield <= _constants.MaxShield - _constants.ShieldPerPotion)
+            {
+                action = new ActionOrder.UseShieldPotion();
+            }
+
+            foreach (var item in _context.Items.Values)
+            {
+                Debug.DrawCircle(debugInterface, item.Position);
+            }
+
+            Debug.DrawText(debugInterface, unit.Position, unit.ShieldPotions.ToString());
+
+            unitStrategy.State = StrategyState.RandomMove;
+
+            if (unit.ShieldPotions < _constants.MaxShieldPotionsInInventory)
+            {
+                MyLoot potion = _context.Items.Values
+                    .Where(i =>
+                        i.InZone &&
+                        i.Type == MyLootType.ShieldPotion
+                    )
+                    .OrderBy(i => i.DistanceSquaredToMyUnit[unit.Id])
+                    .FirstOrDefault();
+
+                if (potion != default)
+                {
+                    if (potion.InMyUnit[unit.Id] && unit.Action == null)
+                    {
+                        var potionDiff = unit.ShieldPotions + potion.Amount - _constants.MaxShieldPotionsInInventory;
+                        if (potionDiff <= 0)
+                        {
+                            _context.Items.Remove(potion.Id);
+                        }
+                        else
+                        {
+                            var contextItem = _context.Items[potion.Id];
+                            contextItem.Amount = potionDiff;
+                            _context.Items[potion.Id] = contextItem;
+                        }
+
+                        action = new ActionOrder.Pickup(potion.Id);
+                    }
+
+                    unitStrategy.MovePosition = potion.Position;
+                    unitStrategy.State = StrategyState.PickupPotion;
+                    _unitStrategies[unit.Id] = unitStrategy;
+                }
+            }
+
+            var radius = MaxObstaclesRadius + _constants.UnitRadius;
+            bool nearPosition = Calc.InsideCircle(unit.Position, unitStrategy.MovePosition, radius);
+            if (unitStrategy.State == StrategyState.RandomMove && nearPosition)
+            {
+                // todo проблема при маленькой зоне, т.к. еду в зону
+                var angle = Random.Next(360);
+                var moveX = game.Zone.NextCenter.X + game.Zone.NextRadius * Math.Cos(angle);
+                var moveY = game.Zone.NextCenter.Y + game.Zone.NextRadius * Math.Sin(angle);
+                unitStrategy.MovePosition = new Vec2(moveX, moveY);
+                _unitStrategies[unit.Id] = unitStrategy;
+            }
+
+            var target = Calc.VecDiff(unit.Position, unitStrategy.MovePosition);
+            Debug.DrawLine(debugInterface, unit.Position, unitStrategy.MovePosition);
+
+            // todo рэндомить движение при обсчете столкновения + нужно вычислять новую поближе к цели!
+            var pathTarget = FindPath(debugInterface, unit, target, unitStrategy.MovePosition);
+
+            orders.Add(
+                unit.Id,
+                new UnitOrder(pathTarget, target, action)
+            );
         }
-
-        var radius = MaxObstaclesRadius + _constants.UnitRadius;
-        bool nearPosition = Calc.InsideCircle(_context.MyUnit.Position, _movePosition, radius);
-        if (randomMove && nearPosition)
-        {
-            // todo проблема при маленькой зоне, т.к. еду в зону
-            var angle = random.Next(360);
-            var moveX = game.Zone.NextCenter.X + game.Zone.NextRadius * Math.Cos(angle);
-            var moveY = game.Zone.NextCenter.Y + game.Zone.NextRadius * Math.Sin(angle);
-            _movePosition = new Vec2(moveX, moveY);
-            randomMove = true;
-        }
-
-        target = Calc.VecDiff(_context.MyUnit.Position, _movePosition);
-        Debug.DrawLine(debugInterface, _context.MyUnit.Position, _movePosition);
-
-
-        // todo рэндомить движение при обсчете столкновения + нужно вычислять новую поближе к цели!
-
-        var pathTarget = FindPath(debugInterface, target);
-
-        orders.Add(
-            _context.MyUnit.Id,
-            new UnitOrder(pathTarget, target, action)
-        );
 
         return new Order(orders);
     }
 
-    private Vec2 FindPath(DebugInterface debugInterface, Vec2 target)
+    private Vec2 FindPath(DebugInterface debugInterface, MyUnit unit, Vec2 target, Vec2 movePosition)
     {
         List<MyObstacle> nearestObstacles =
             _context.Obstacles.Values
-                .OrderBy(i => i.DistanceSquaredToMyUnit)
+                .OrderBy(i => i.DistanceSquaredToMyUnit[unit.Id])
                 .Take(10)
                 .ToList();
 
@@ -131,18 +130,17 @@ public class MyStrategy
         int simulationTicks = 30;
         double ticksDivider = 10;
 
-
         for (int i = 0; i < (fullAngle / simAngle) - 1; i++)
         {
             var angle = simAngle * i;
 
             bool insideObstacle = false;
             bool hit = false;
-            var newMyPosition = _context.MyUnit.Position;
+            var newMyPosition = unit.Position;
 
             var simulationVec = Calc.Normalize(target);
-            var speedModifier = GetSpeedModifier(_context.MyUnit.Direction, simulationVec);
-            var speedModifier2 = GetSpeedModifier(_context.MyUnit.Velocity, simulationVec);
+            var speedModifier = GetSpeedModifier(unit.Direction, simulationVec);
+            var speedModifier2 = GetSpeedModifier(unit.Velocity, simulationVec);
 
             double simSpeed = (_constants.MaxUnitForwardSpeed * speedModifier * speedModifier2) / ticksDivider;
             simulationVec = Calc.VecMultiply(simulationVec, simSpeed);
@@ -182,16 +180,15 @@ public class MyStrategy
                     }
                 }
 
-
                 if (hit)
                 {
                     var green = new Color(0, 200, 0, 100);
-                    Debug.DrawLine(debugInterface, _context.MyUnit.Position, newMyPosition, green);
+                    Debug.DrawLine(debugInterface, unit.Position, newMyPosition, green);
                     break;
                 }
 
-                bool inPosition = Calc.InsideCircle(newMyPosition, _movePosition,
-                    _constants.UnitRadius / ticksDivider);
+                double accuracy = _constants.UnitRadius / ticksDivider;
+                bool inPosition = Calc.InsideCircle(newMyPosition, movePosition, accuracy);
                 if (inPosition)
                 {
                     break;
@@ -213,7 +210,7 @@ public class MyStrategy
                 if (insideObstacle)
                 {
                     var red = new Color(200, 0, 0, 100);
-                    Debug.DrawLine(debugInterface, _context.MyUnit.Position, newMyPosition, red);
+                    Debug.DrawLine(debugInterface, unit.Position, newMyPosition, red);
                     break;
                 }
             }
@@ -224,7 +221,7 @@ public class MyStrategy
                 target = Calc.VecMultiply(target, simSpeed * dividedTick);
 
                 var blue = new Color(0, 0, 200, 100);
-                Debug.DrawLine(debugInterface, _context.MyUnit.Position, newMyPosition, blue);
+                Debug.DrawLine(debugInterface, unit.Position, newMyPosition, blue);
                 break;
             }
         }

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using AiCup22.Model;
 
 namespace AiCup22.Strategy;
@@ -17,9 +18,9 @@ public struct MyLoot : IEquatable<MyLoot>
 
     public bool InZone { get; set; }
 
-    public double DistanceSquaredToMyUnit { get; set; }
+    public Dictionary<int, double> DistanceSquaredToMyUnit { get; set; } = new();
 
-    public bool InMyUnit { get; set; }
+    public Dictionary<int, bool> InMyUnit { get; set; } = new();
 
     public bool Equals(MyLoot other)
     {

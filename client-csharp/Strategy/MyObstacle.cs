@@ -1,4 +1,5 @@
-﻿using AiCup22.Model;
+﻿using System.Collections.Generic;
+using AiCup22.Model;
 
 namespace AiCup22.Strategy;
 
@@ -12,7 +13,7 @@ public struct MyObstacle
     /// <summary>
     /// Center position
     /// </summary>
-    public AiCup22.Model.Vec2 Position { get; set; }
+    public Vec2 Position { get; set; }
 
     /// <summary>
     /// Obstacle's radius
@@ -29,9 +30,9 @@ public struct MyObstacle
     /// </summary>
     public bool CanShootThrough { get; set; }
 
-    public double DistanceSquaredToMyUnit { get; set; }
+    public Dictionary<int, double> DistanceSquaredToMyUnit { get; set; }
 
-    public bool InMyUnit { get; set; }
+    public Dictionary<int, bool> InMyUnit { get; set; }
 
     public MyObstacle(Obstacle obstacle)
     {
@@ -40,7 +41,7 @@ public struct MyObstacle
         Radius = obstacle.Radius;
         CanSeeThrough = obstacle.CanSeeThrough;
         CanShootThrough = obstacle.CanShootThrough;
-        DistanceSquaredToMyUnit = 0;
-        InMyUnit = false;
+        DistanceSquaredToMyUnit = new Dictionary<int, double>();
+        InMyUnit = new Dictionary<int, bool>();
     }
 }
