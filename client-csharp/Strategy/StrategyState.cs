@@ -3,5 +3,8 @@
 public enum StrategyState
 {
     RandomMove = 0,
-    PickupPotion
+    PickupPotion,
+    PickupWeapon,
+    PickupAmmo,
+    Hunting
 }

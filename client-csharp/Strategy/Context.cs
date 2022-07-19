@@ -39,7 +39,7 @@ public class Context
 
     private void AddOrUpdateUnits(Game game)
     {
-        RemoveEnemyUnits(game);
+        RemoveEnemyUnits();
         RemoveUnits(game);
 
         foreach (Unit unit in game.Units)
@@ -83,24 +83,9 @@ public class Context
         }
     }
 
-    private void RemoveEnemyUnits(Game game)
+    private void RemoveEnemyUnits()
     {
         EnemyUnits.Clear();
-        return;
-
-        var removedItems = new List<int>();
-        foreach (var unit in EnemyUnits.Values)
-        {
-            if (game.CurrentTick - unit.CurrentTick >= _constants.TicksPerSecond)
-            {
-                removedItems.Add(unit.Id);
-            }
-        }
-
-        foreach (var removedId in removedItems)
-        {
-            EnemyUnits.Remove(removedId);
-        }
     }
 
     private void RemoveUnits(Game game)
