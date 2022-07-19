@@ -9,6 +9,10 @@ namespace AiCup22;
 
 public class MyStrategy
 {
+    private const int WandWeaponType = 0;
+    private const int StaffWeaponType = 1;
+    private const int BowWeaponType = 2;
+
     private const double MaxObstaclesRadius = 3;
     private static readonly Random Random = new();
 
@@ -37,15 +41,14 @@ public class MyStrategy
             }
 
             var unitStrategy = _unitStrategies[unit.Id];
-            unitStrategy.State = StrategyState.RandomMove;
             Debug.DrawText(debugInterface, unit.Position, unit.ShieldPotions.ToString());
 
             ActionOrder action = null;
 
             if (unit.Action == null &&
-                unit.Shield > _constants.MaxShield / 3 &&
-                unit.Weapon != null &&
-                unit.Ammo[unit.Weapon.Value] > 0)
+                unit.Weapon is StaffWeaponType &&
+                unit.Ammo[unit.Weapon.Value] > 0 &&
+                unit.Shield >= _constants.MaxShield - _constants.ShieldPerPotion)
             {
                 MyUnit enemy = _context.Enemies.Values
                     .OrderBy(i => i.DistanceSquaredToMyUnit[unit.Id])
@@ -53,18 +56,17 @@ public class MyStrategy
 
                 if (enemy != default)
                 {
+                    bool hit = false;
+
                     Vec2 projectile = unit.Position;
                     Vec2 enemyPosition = enemy.Position;
 
-                    bool hit = false;
+                    double projectileSpeed = _constants.Weapons[unit.Weapon.Value].ProjectileSpeed /
+                                             _constants.TicksPerSecond;
 
-                    int simulationTicks = 20;
-                    double ticksDivider = 10;
-
-                    double projectileSpeed = 30 / ticksDivider;
                     Vec2 projectileV = Calc.VecMultiply(unit.Direction, projectileSpeed);
 
-                    for (int tick = 1; tick <= simulationTicks * ticksDivider; tick++)
+                    for (int tick = 1; tick <= _constants.TicksPerSecond - 5; tick++)
                     {
                         var prevProjectile = projectile;
                         projectile = Calc.VecAdd(projectile, projectileV);
@@ -91,54 +93,30 @@ public class MyStrategy
                     _unitStrategies[unit.Id] = unitStrategy;
                 }
             }
-
-            if (unitStrategy.State != StrategyState.Hunting &&
-                unit.ShieldPotions > 0 &&
-                unit.Shield <= _constants.MaxShield - _constants.ShieldPerPotion)
+            else
             {
-                action = new ActionOrder.UseShieldPotion();
+                unitStrategy.State = StrategyState.PickUp;
             }
 
-            if (unitStrategy.State != StrategyState.Hunting &&
-                unit.ShieldPotions < _constants.MaxShieldPotionsInInventory)
+            if (unitStrategy.State != StrategyState.Hunting)
             {
-                List<int> currentPickedUp = _unitStrategies.Values
-                    .Where(s => s.UnitId != unit.Id)
-                    .Select(s => s.PickupLootId)
-                    .ToList();
-
-                MyLoot potion = _context.Items.Values
-                    .Where(i =>
-                        i.InZone &&
-                        i.Type == MyLootType.ShieldPotion &&
-                        !currentPickedUp.Contains(i.Id)
-                    )
-                    .OrderBy(i => i.DistanceSquaredToMyUnit[unit.Id])
-                    .FirstOrDefault();
-
-                if (potion != default)
+                if (unit.Weapon is not StaffWeaponType)
                 {
-                    if (potion.InMyUnit[unit.Id] && unit.Action == null)
-                    {
-                        var potionDiff = unit.ShieldPotions + potion.Amount - _constants.MaxShieldPotionsInInventory;
-                        if (potionDiff <= 0)
-                        {
-                            _context.Items.Remove(potion.Id);
-                        }
-                        else
-                        {
-                            var contextItem = _context.Items[potion.Id];
-                            contextItem.Amount = potionDiff;
-                            _context.Items[potion.Id] = contextItem;
-                        }
-
-                        action = new ActionOrder.Pickup(potion.Id);
-                    }
-
-                    unitStrategy.MovePosition = potion.Position;
-                    unitStrategy.State = StrategyState.PickupPotion;
-                    unitStrategy.PickupLootId = potion.Id;
-                    _unitStrategies[unit.Id] = unitStrategy;
+                    action = PickUp(MyLootType.Staff, unit, unitStrategy);
+                }
+                else if (unit.Weapon is StaffWeaponType &&
+                         unit.Ammo[unit.Weapon.Value] == 0)
+                {
+                    action = PickUp(MyLootType.StaffAmmo, unit, unitStrategy);
+                }
+                else if (unit.ShieldPotions == 0)
+                {
+                    action = PickUp(MyLootType.ShieldPotion, unit, unitStrategy);
+                }
+                else if (unit.ShieldPotions > 0 &&
+                         unit.Shield <= _constants.MaxShield - _constants.ShieldPerPotion)
+                {
+                    action = new ActionOrder.UseShieldPotion();
                 }
             }
 
@@ -169,6 +147,45 @@ public class MyStrategy
         return new Order(orders);
     }
 
+    private ActionOrder PickUp(MyLootType lootType, MyUnit unit, UnitStrategy unitStrategy)
+    {
+        ActionOrder action = null;
+
+        List<int> currentPickedUp = _unitStrategies.Values
+            .Where(s => s.UnitId != unit.Id)
+            .Select(s => s.PickupLootId)
+            .ToList();
+
+        MyLoot item = _context.Items.Values
+            .Where(i =>
+                i.InZone &&
+                i.Type == lootType &&
+                !currentPickedUp.Contains(i.Id)
+            )
+            .OrderBy(i => i.DistanceSquaredToMyUnit[unit.Id])
+            .FirstOrDefault();
+
+        if (item != default)
+        {
+            if (item.InMyUnit[unit.Id] && unit.Action == null)
+            {
+                action = new ActionOrder.Pickup(item.Id);
+                _context.Items.Remove(item.Id);
+                unitStrategy.State = StrategyState.RandomMove;
+            }
+            else
+            {
+                unitStrategy.State = StrategyState.PickUp;
+            }
+
+            unitStrategy.MovePosition = item.Position;
+            unitStrategy.PickupLootId = item.Id;
+            _unitStrategies[unit.Id] = unitStrategy;
+        }
+
+        return action;
+    }
+
     private Vec2 FindPath(DebugInterface debugInterface, MyUnit unit, Vec2 target, Vec2 movePosition)
     {
         List<MyObstacle> nearestObstacles =
@@ -180,8 +197,8 @@ public class MyStrategy
         double fullAngle = 360;
         double simAngle = 15; // класс для вычисления лучшей позиции со score
 
-        int simulationTicks = 30;
-        double ticksDivider = 10;
+        int simulationTicks = 90;
+        //double ticksDivider = 10;
 
         for (int i = 0; i < (fullAngle / simAngle) - 1; i++)
         {
@@ -196,18 +213,18 @@ public class MyStrategy
             var simVec = Calc.Normalize(target);
             var speedModifier = GetSpeedModifier(unit.Direction, simVec);
 
-            double simSpeed = (_constants.MaxUnitForwardSpeed * speedModifier) / ticksDivider;
+            double simSpeed = (_constants.MaxUnitForwardSpeed * speedModifier) / _constants.TicksPerSecond;
             simVec = Calc.VecMultiply(simVec, simSpeed);
             simVec = Calc.Rotate(simVec, angle);
 
             int tick = 1;
-            for (; tick <= simulationTicks * ticksDivider; tick++)
+            for (; tick <= simulationTicks; tick++)
             {
                 newPosition = Calc.VecAdd(newPosition, simVec);
 
                 foreach (var projectile in _context.Projectiles.Values)
                 {
-                    var baseProjectileVelocity = Calc.VecDiv(projectile.Velocity, ticksDivider);
+                    var baseProjectileVelocity = Calc.VecDiv(projectile.Velocity, _constants.TicksPerSecond);
 
                     Vec2 simProjectileVelocity;
                     Vec2 projectilePosition1;
@@ -240,18 +257,18 @@ public class MyStrategy
                     break;
                 }
 
-                double accuracy = _constants.UnitRadius / ticksDivider;
+                double accuracy = _constants.UnitRadius / _constants.TicksPerSecond;
                 bool inPosition = Calc.InsideCircle(newPosition, movePosition, accuracy);
                 if (inPosition)
                 {
                     break;
                 }
 
-                if (tick < ticksDivider / 2)
+                if (tick < 5)
                 {
                     foreach (var obstacle in nearestObstacles)
                     {
-                        var r = obstacle.Radius + _constants.UnitRadius;
+                        var r = obstacle.Radius;
                         obstacleCollision = Calc.InsideCircle(newPosition, obstacle.Position, r);
                         if (obstacleCollision)
                         {
@@ -296,7 +313,7 @@ public class MyStrategy
             if (!obstacleCollision && !unitCollision && !hit)
             {
                 target = simVec;
-                target = Calc.VecMultiply(target, ticksDivider);
+                target = Calc.VecMultiply(target, _constants.TicksPerSecond);
 
                 var blue = new Color(0, 0, 200, 100);
                 Debug.DrawLine(debugInterface, unit.Position, newPosition, blue);
