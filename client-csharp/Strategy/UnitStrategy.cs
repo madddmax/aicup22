@@ -8,6 +8,7 @@ public struct UnitStrategy
     public StrategyState State { get; set; }
     public Vec2 MovePosition { get; set; }
     public int PickupLootId { get; set; }
+    public int EnemyId { get; set; }
 
     public UnitStrategy(int unitId)
     {
@@ -15,5 +16,6 @@ public struct UnitStrategy
         State = StrategyState.RandomMove;
         MovePosition = new Vec2(0, 0);
         PickupLootId = 0;
+        EnemyId = 0;
     }
 }

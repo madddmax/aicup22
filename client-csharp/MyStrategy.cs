@@ -42,13 +42,65 @@ public class MyStrategy
 
             ActionOrder action = null;
 
-            if (unit.ShieldPotions > 0 &&
+            if (unit.Action == null &&
+                unit.Shield > _constants.MaxShield / 3 &&
+                unit.Weapon != null &&
+                unit.Ammo[unit.Weapon.Value] > 0)
+            {
+                MyUnit enemy = _context.Enemies.Values
+                    .OrderBy(i => i.DistanceSquaredToMyUnit[unit.Id])
+                    .FirstOrDefault();
+
+                if (enemy != default)
+                {
+                    Vec2 projectile = unit.Position;
+                    Vec2 enemyPosition = enemy.Position;
+
+                    bool hit = false;
+
+                    int simulationTicks = 20;
+                    double ticksDivider = 10;
+
+                    double projectileSpeed = 30 / ticksDivider;
+                    Vec2 projectileV = Calc.VecMultiply(unit.Direction, projectileSpeed);
+
+                    for (int tick = 1; tick <= simulationTicks * ticksDivider; tick++)
+                    {
+                        var prevProjectile = projectile;
+                        projectile = Calc.VecAdd(projectile, projectileV);
+
+                        hit = Calc.IntersectCircleLine(prevProjectile, projectile, enemyPosition,
+                            _constants.UnitRadius * 8 / projectileSpeed);
+
+                        if (hit)
+                        {
+                            Debug.DrawLine(debugInterface, prevProjectile, projectile);
+                            Debug.DrawCircle(debugInterface, enemyPosition, _constants.UnitRadius);
+                            break;
+                        }
+                    }
+
+                    if (hit)
+                    {
+                        action = new ActionOrder.Aim(true);
+                    }
+
+                    unitStrategy.MovePosition = enemy.Position;
+                    unitStrategy.State = StrategyState.Hunting;
+                    unitStrategy.EnemyId = enemy.Id;
+                    _unitStrategies[unit.Id] = unitStrategy;
+                }
+            }
+
+            if (unitStrategy.State != StrategyState.Hunting &&
+                unit.ShieldPotions > 0 &&
                 unit.Shield <= _constants.MaxShield - _constants.ShieldPerPotion)
             {
                 action = new ActionOrder.UseShieldPotion();
             }
 
-            if (unit.ShieldPotions < _constants.MaxShieldPotionsInInventory)
+            if (unitStrategy.State != StrategyState.Hunting &&
+                unit.ShieldPotions < _constants.MaxShieldPotionsInInventory)
             {
                 List<int> currentPickedUp = _unitStrategies.Values
                     .Where(s => s.UnitId != unit.Id)
@@ -206,20 +258,30 @@ public class MyStrategy
                             break;
                         }
                     }
+                }
 
-                    foreach (var myUnit in _context.Units.Values)
+                foreach (var myUnit in _context.Units.Values)
+                {
+                    if (myUnit.Id == unit.Id)
                     {
-                        if (myUnit.Id == unit.Id)
-                        {
-                            continue;
-                        }
+                        continue;
+                    }
 
-                        var r = _constants.UnitRadius + _constants.UnitRadius;
-                        unitCollision = Calc.InsideCircle(newPosition, myUnit.Position, r);
-                        if (unitCollision)
-                        {
-                            break;
-                        }
+                    var r = _constants.UnitRadius + 5 * _constants.UnitRadius;
+                    unitCollision = Calc.InsideCircle(newPosition, myUnit.Position, r);
+                    if (unitCollision)
+                    {
+                        break;
+                    }
+                }
+
+                foreach (var enemy in _context.Enemies.Values)
+                {
+                    var r = _constants.UnitRadius + 5 * _constants.UnitRadius;
+                    unitCollision = Calc.InsideCircle(newPosition, enemy.Position, r);
+                    if (unitCollision)
+                    {
+                        break;
                     }
                 }
 

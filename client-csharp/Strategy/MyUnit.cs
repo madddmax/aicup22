@@ -1,9 +1,11 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using AiCup22.Model;
+using Action = AiCup22.Model.Action;
 
 namespace AiCup22.Strategy;
 
-public struct MyUnit
+public struct MyUnit : IEquatable<MyUnit>
 {
     /// <summary>
     /// Unique id
@@ -110,5 +112,30 @@ public struct MyUnit
 
         CurrentTick = currentTick;
         DistanceSquaredToMyUnit = new Dictionary<int, double>();
+    }
+
+    public bool Equals(MyUnit other)
+    {
+        return Id == other.Id;
+    }
+
+    public override bool Equals(object obj)
+    {
+        return obj is MyUnit other && Equals(other);
+    }
+
+    public override int GetHashCode()
+    {
+        return Id;
+    }
+
+    public static bool operator ==(MyUnit left, MyUnit right)
+    {
+        return left.Equals(right);
+    }
+
+    public static bool operator !=(MyUnit left, MyUnit right)
+    {
+        return !left.Equals(right);
     }
 }

@@ -46,13 +46,13 @@ public static class Debug
         debugInterface.AddPie(unit.Position, 50, angle - halfFieldOfView, angle + halfFieldOfView, blue);
     }
 
-    public static void DrawCircle(DebugInterface debugInterface, Vec2 p)
+    public static void DrawCircle(DebugInterface debugInterface, Vec2 p, double r = 0.3)
     {
         if (ReleaseMode)
         {
             return;
         }
 
-        debugInterface.AddCircle(p, 0.3, new Color(0, 0, 0, 100));
+        debugInterface.AddCircle(p, r, new Color(0, 0, 0, 100));
     }
 }

@@ -12,7 +12,7 @@ public class Context
     public readonly Dictionary<int, MyLoot> Items = new();
     public readonly Dictionary<int, MyObstacle> Obstacles;
     public readonly Dictionary<int, MyProjectile> Projectiles = new();
-    public readonly Dictionary<int, MyUnit> EnemyUnits = new();
+    public readonly Dictionary<int, MyUnit> Enemies = new();
     public readonly Dictionary<int, MyUnit> Units = new();
 
     public Context(Constants constants)
@@ -47,7 +47,7 @@ public class Context
             var bot = new MyUnit(unit, game.CurrentTick);
             if (bot.PlayerId != game.MyId)
             {
-                EnemyUnits[bot.Id] = bot;
+                Enemies[bot.Id] = bot;
             }
             else
             {
@@ -55,7 +55,7 @@ public class Context
             }
         }
 
-        foreach (var enemy in EnemyUnits.Values)
+        foreach (var enemy in Enemies.Values)
         {
             foreach (var unit in Units.Values)
             {
@@ -63,7 +63,7 @@ public class Context
                 enemy.DistanceSquaredToMyUnit[unit.Id] = distanceSquaredToMyUnit;
             }
 
-            EnemyUnits[enemy.Id] = enemy;
+            Enemies[enemy.Id] = enemy;
         }
 
         foreach (var unit1 in Units.Values)
@@ -85,7 +85,7 @@ public class Context
 
     private void RemoveEnemyUnits()
     {
-        EnemyUnits.Clear();
+        Enemies.Clear();
     }
 
     private void RemoveUnits(Game game)
