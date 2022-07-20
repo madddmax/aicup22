@@ -50,7 +50,11 @@ public class Context
             var bot = new MyUnit(unit, game.CurrentTick);
             if (bot.PlayerId != game.MyId)
             {
-                Enemies[bot.Id] = bot;
+                if (bot.RemainingSpawnTime == null ||
+                    bot.RemainingSpawnTime.Value * _constants.TicksPerSecond < 5)
+                {
+                    Enemies[bot.Id] = bot;
+                }
             }
             else
             {

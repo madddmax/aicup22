@@ -35,96 +35,67 @@ public class MyStrategy
 
         foreach (var unit in _context.Units.Values)
         {
-            if (!_unitStrategies.ContainsKey(unit.Id))
-            {
-                _unitStrategies.Add(unit.Id, new UnitStrategy(unit.Id));
-            }
-
-            var unitStrategy = _unitStrategies[unit.Id];
-            Debug.DrawText(debugInterface, unit.Position, unit.ShieldPotions.ToString());
-
             ActionOrder action = null;
+            var strategy = GetStrategy(unit);
 
-            if (unit.Action == null &&
+            Debug.DrawText(debugInterface, unit.Position, unit.ShieldPotions.ToString());
+            var brown = new Color(150, 75, 0, 100);
+            Debug.DrawLine(debugInterface, unit.Position, strategy.MovePosition, brown);
+
+            if (unit.RemainingSpawnTime == null &&
+                unit.Action == null &&
                 unit.Weapon is StaffWeaponType &&
                 unit.Ammo[unit.Weapon.Value] > 0 &&
-                unit.Shield >= _constants.MaxShield - _constants.ShieldPerPotion)
+                unit.Shield + unit.Health > _constants.UnitHealth)
             {
-                MyUnit enemy = _context.Enemies.Values
-                    .OrderBy(i => i.DistanceSquaredToMyUnit[unit.Id])
-                    .FirstOrDefault();
-
-                if (enemy != default)
-                {
-                    bool hit = false;
-
-                    Vec2 projectile = unit.Position;
-                    Vec2 enemyPosition = enemy.Position;
-
-                    double projectileSpeed = _constants.Weapons[unit.Weapon.Value].ProjectileSpeed /
-                                             _constants.TicksPerSecond;
-
-                    Vec2 projectileV = Calc.VecMultiply(unit.Direction, projectileSpeed);
-
-                    for (int tick = 1; tick <= _constants.TicksPerSecond - 5; tick++)
-                    {
-                        var prevProjectile = projectile;
-                        projectile = Calc.VecAdd(projectile, projectileV);
-
-                        hit = Calc.IntersectCircleLine(prevProjectile, projectile, enemyPosition,
-                            _constants.UnitRadius * 8 / projectileSpeed);
-
-                        if (hit)
-                        {
-                            Debug.DrawLine(debugInterface, prevProjectile, projectile);
-                            Debug.DrawCircle(debugInterface, enemyPosition, _constants.UnitRadius);
-                            break;
-                        }
-                    }
-
-                    if (hit)
-                    {
-                        action = new ActionOrder.Aim(true);
-                    }
-
-                    unitStrategy.MovePosition = enemy.Position;
-                    unitStrategy.State = StrategyState.Hunting;
-                    _unitStrategies[unit.Id] = unitStrategy;
-                }
+                action = Hunting(debugInterface, unit, unit.Weapon.Value, strategy);
+            }
+            else if(strategy.State == StrategyState.Hunting)
+            {
+                RandomMove(unit, strategy);
             }
             else
             {
-                unitStrategy.State = StrategyState.PickUp;
+                SetRandomState(unit, strategy);
             }
 
-            if (unitStrategy.State != StrategyState.Hunting)
+            if (strategy.State != StrategyState.Hunting &&
+                unit.RemainingSpawnTime == null)
             {
                 if (unit.Weapon is not StaffWeaponType)
                 {
-                    action = PickUp(MyLootType.Staff, unit, unitStrategy);
+                    action = PickUp(MyLootType.Staff, unit, strategy);
                 }
                 else if (unit.Weapon is StaffWeaponType &&
-                         unit.Ammo[unit.Weapon.Value] == 0)
+                         unit.Ammo[unit.Weapon.Value] < _constants.Weapons[unit.Weapon.Value].MaxInventoryAmmo / 2)
                 {
-                    action = PickUp(MyLootType.StaffAmmo, unit, unitStrategy);
+                    action = PickUp(MyLootType.StaffAmmo, unit, strategy);
                 }
                 else if (unit.ShieldPotions == 0)
                 {
-                    action = PickUp(MyLootType.ShieldPotion, unit, unitStrategy);
+                    action = PickUp(MyLootType.ShieldPotion, unit, strategy);
                 }
                 else if (unit.ShieldPotions > 0 &&
-                         unit.Shield <= _constants.MaxShield - _constants.ShieldPerPotion)
+                         unit.Shield <= _constants.MaxShield - _constants.ShieldPerPotion &&
+                         (strategy.State != StrategyState.PickUp ||
+                          strategy.ApproxTicksDistance > _constants.ShieldPotionUseTime))
                 {
                     action = new ActionOrder.UseShieldPotion();
                 }
             }
 
-            RandomMoveIfNeeded(unit, unitStrategy);
+            if (strategy.State == StrategyState.PickUp &&
+                unit.RemainingSpawnTime != null)
+            {
+                RandomMove(unit, strategy);
+            }
 
-            var target = Calc.VecDiff(unit.Position, unitStrategy.MovePosition);
-            Debug.DrawLine(debugInterface, unit.Position, unitStrategy.MovePosition);
+            RandomMoveIfNeeded(unit, strategy);
 
-            var pathTarget = FindPath(debugInterface, unit, target, unitStrategy.MovePosition);
+            var target = Calc.VecDiff(unit.Position, strategy.MovePosition);
+            Debug.DrawLine(debugInterface, unit.Position, strategy.MovePosition);
+
+            var pathTarget = FindPath(debugInterface, unit, target, strategy.MovePosition);
 
             orders.Add(
                 unit.Id,
@@ -135,28 +106,100 @@ public class MyStrategy
         return new Order(orders);
     }
 
-    private void RandomMoveIfNeeded(MyUnit unit, UnitStrategy unitStrategy)
+    private UnitStrategy GetStrategy(MyUnit unit)
+    {
+        if (!_unitStrategies.TryGetValue(unit.Id, out var strategy))
+        {
+            strategy = new UnitStrategy(unit.Id);
+        }
+
+        var unitAverageSpeed = _constants.MaxUnitForwardSpeed + _constants.MaxUnitBackwardSpeed / 2;
+        strategy.ApproxTicksDistance = (int)(Calc.Distance(unit.Position, strategy.MovePosition) / unitAverageSpeed);
+
+        _unitStrategies[unit.Id] = strategy;
+
+        return strategy;
+    }
+
+    private ActionOrder Hunting(DebugInterface debugInterface, MyUnit unit, int weapon, UnitStrategy unitStrategy)
+    {
+        ActionOrder action = null;
+
+        MyUnit enemy = _context.Enemies.Values
+            .OrderBy(i => i.DistanceSquaredToMyUnit[unit.Id])
+            .FirstOrDefault();
+
+        if (enemy != default)
+        {
+            bool hit = false;
+
+            Vec2 projectile = unit.Position;
+            Vec2 enemyPosition = enemy.Position;
+
+            double projectileSpeed = _constants.Weapons[weapon].ProjectileSpeed / _constants.TicksPerSecond;
+            Vec2 projectileV = Calc.VecMultiply(unit.Direction, projectileSpeed);
+
+            for (int tick = 1; tick <= _constants.TicksPerSecond - 5; tick++)
+            {
+                var prevProjectile = projectile;
+                projectile = Calc.VecAdd(projectile, projectileV);
+
+                hit = Calc.IntersectCircleLine(prevProjectile, projectile, enemyPosition,
+                    _constants.UnitRadius * 8 / projectileSpeed);
+
+                if (hit)
+                {
+                    Debug.DrawLine(debugInterface, prevProjectile, projectile);
+                    Debug.DrawCircle(debugInterface, enemyPosition, _constants.UnitRadius);
+                    break;
+                }
+            }
+
+            if (hit)
+            {
+                action = new ActionOrder.Aim(true);
+            }
+
+            unitStrategy.MovePosition = enemy.Position;
+            unitStrategy.State = StrategyState.Hunting;
+            _unitStrategies[unit.Id] = unitStrategy;
+        }
+
+        return action;
+    }
+
+    private void RandomMoveIfNeeded(MyUnit unit, UnitStrategy strategy)
     {
         var radius = MaxObstaclesRadius + _constants.UnitRadius;
-        bool nearRandomPosition = Calc.InsideCircle(unit.Position, unitStrategy.MovePosition, radius);
-        if (unitStrategy.State == StrategyState.RandomMove && nearRandomPosition)
+        bool nearRandomPosition = Calc.InsideCircle(unit.Position, strategy.MovePosition, radius);
+        if ((strategy.MovePosition.X == 0 && strategy.MovePosition.Y == 0) ||
+            (strategy.State == StrategyState.RandomMove && nearRandomPosition))
         {
-            unitStrategy.MovePosition = GerRandomMove(_context.Zone);
-            unitStrategy.AreaPickUpIds.Clear();
-            _unitStrategies[unit.Id] = unitStrategy;
+            RandomMove(unit, strategy);
         }
 
         bool inZone = Calc.InsideCircle(
-            unitStrategy.MovePosition, _context.Zone.CurrentCenter, _context.Zone.CurrentRadius
+            strategy.MovePosition, _context.Zone.CurrentCenter, _context.Zone.CurrentRadius
         );
-
         if (!inZone)
         {
-            unitStrategy.State = StrategyState.RandomMove;
-            unitStrategy.MovePosition = GerRandomMove(_context.Zone);
-            unitStrategy.AreaPickUpIds.Clear();
-            _unitStrategies[unit.Id] = unitStrategy;
+            RandomMove(unit, strategy);
         }
+    }
+
+    private void SetRandomState(MyUnit unit, UnitStrategy unitStrategy)
+    {
+        unitStrategy.State = StrategyState.RandomMove;
+        unitStrategy.AreaPickUpIds.Clear();
+        _unitStrategies[unit.Id] = unitStrategy;
+    }
+
+    private void RandomMove(MyUnit unit, UnitStrategy unitStrategy)
+    {
+        unitStrategy.State = StrategyState.RandomMove;
+        unitStrategy.AreaPickUpIds.Clear();
+        unitStrategy.MovePosition = GerRandomMove(_context.Zone);
+        _unitStrategies[unit.Id] = unitStrategy;
     }
 
     private static Vec2 GerRandomMove(Zone zone)
@@ -169,7 +212,7 @@ public class MyStrategy
         return new Vec2(moveX, moveY);
     }
 
-    private ActionOrder PickUp(MyLootType lootType, MyUnit unit, UnitStrategy unitStrategy)
+    private ActionOrder PickUp(MyLootType lootType, MyUnit unit, UnitStrategy strategy)
     {
         ActionOrder action = null;
 
@@ -187,32 +230,33 @@ public class MyStrategy
             .OrderBy(i => i.DistanceSquaredToMyUnit[unit.Id])
             .FirstOrDefault();
 
-        if (item != default)
+        if (item == default)
         {
-            if (item.InMyUnit[unit.Id] && unit.Action == null)
-            {
-                action = new ActionOrder.Pickup(item.Id);
-                _context.Items.Remove(item.Id);
+            return null;
+        }
 
-                unitStrategy.AreaPickUpIds.Clear();
-                unitStrategy.State = StrategyState.RandomMove;
-            }
-            else
+        if (item.InMyUnit[unit.Id] && unit.Action == null)
+        {
+            action = new ActionOrder.Pickup(item.Id);
+            _context.Items.Remove(item.Id);
+
+            SetRandomState(unit, strategy);
+        }
+        else
+        {
+            foreach (var loot in _context.Items.Values)
             {
-                foreach (var loot in _context.Items.Values)
+                const double pickUpArea = 15;
+                if (Math.Abs(loot.Position.X - item.Position.X) <= pickUpArea &&
+                    Math.Abs(loot.Position.Y - item.Position.Y) <= pickUpArea)
                 {
-                    if (Math.Abs(loot.Position.X - item.Position.X) <= 5 &&
-                        Math.Abs(loot.Position.Y - item.Position.Y) <= 5)
-                    {
-                        unitStrategy.AreaPickUpIds.Add(loot.Id);
-                    }
+                    strategy.AreaPickUpIds.Add(loot.Id);
                 }
-
-                unitStrategy.State = StrategyState.PickUp;
             }
 
-            unitStrategy.MovePosition = item.Position;
-            _unitStrategies[unit.Id] = unitStrategy;
+            strategy.State = StrategyState.PickUp;
+            strategy.MovePosition = item.Position;
+            _unitStrategies[unit.Id] = strategy;
         }
 
         return action;
@@ -237,6 +281,7 @@ public class MyStrategy
 
             bool obstacleCollision = false;
             bool unitCollision = false;
+            bool inZone = true;
             bool hit = false;
 
             var newPosition = unit.Position;
@@ -288,14 +333,14 @@ public class MyStrategy
                     break;
                 }
 
-                double accuracy = _constants.UnitRadius / _constants.TicksPerSecond;
+                double accuracy = _constants.UnitRadius / 5;
                 bool inPosition = Calc.InsideCircle(newPosition, movePosition, accuracy);
                 if (inPosition)
                 {
                     break;
                 }
 
-                if (tick < 5)
+                if (tick < _constants.TicksPerSecond / 2)
                 {
                     foreach (var obstacle in nearestObstacles)
                     {
@@ -306,6 +351,10 @@ public class MyStrategy
                             break;
                         }
                     }
+
+                    inZone = Calc.InsideCircle(
+                        newPosition, _context.Zone.CurrentCenter, _context.Zone.CurrentRadius
+                    );
                 }
 
                 foreach (var myUnit in _context.Units.Values)
@@ -333,7 +382,7 @@ public class MyStrategy
                     }
                 }
 
-                if (obstacleCollision || unitCollision)
+                if (obstacleCollision || unitCollision || !inZone)
                 {
                     var red = new Color(200, 0, 0, 100);
                     Debug.DrawLine(debugInterface, unit.Position, newPosition, red);
@@ -341,7 +390,7 @@ public class MyStrategy
                 }
             }
 
-            if (!obstacleCollision && !unitCollision && !hit)
+            if (!obstacleCollision && !unitCollision && !hit && inZone)
             {
                 target = simVec;
                 target = Calc.VecMultiply(target, _constants.TicksPerSecond);
