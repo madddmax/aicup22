@@ -44,7 +44,7 @@ public class MyStrategy
 
             if (unit.RemainingSpawnTime == null &&
                 unit.Action == null &&
-                unit.Weapon is StaffWeaponType &&
+                unit.Weapon is BowWeaponType &&
                 unit.Ammo[unit.Weapon.Value] > 0 &&
                 unit.Shield + unit.Health > _constants.UnitHealth)
             {
@@ -62,14 +62,14 @@ public class MyStrategy
             if (strategy.State != StrategyState.Hunting &&
                 unit.RemainingSpawnTime == null)
             {
-                if (unit.Weapon is not StaffWeaponType)
+                if (unit.Weapon is not BowWeaponType)
                 {
-                    action = PickUp(MyLootType.Staff, unit, strategy);
+                    action = PickUp(MyLootType.Bow, unit, strategy);
                 }
-                else if (unit.Weapon is StaffWeaponType &&
+                else if (unit.Weapon is BowWeaponType &&
                          unit.Ammo[unit.Weapon.Value] < _constants.Weapons[unit.Weapon.Value].MaxInventoryAmmo / 2)
                 {
-                    action = PickUp(MyLootType.StaffAmmo, unit, strategy);
+                    action = PickUp(MyLootType.BowAmmo, unit, strategy);
                 }
                 else if (unit.ShieldPotions < 3)
                 {
