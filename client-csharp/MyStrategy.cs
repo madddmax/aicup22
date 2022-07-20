@@ -39,8 +39,8 @@ public class MyStrategy
             var strategy = GetStrategy(unit);
 
             Debug.DrawText(debugInterface, unit.Position, unit.ShieldPotions.ToString());
-            var brown = new Color(150, 75, 0, 100);
-            Debug.DrawLine(debugInterface, unit.Position, strategy.MovePosition, brown);
+            //var brown = new Color(150, 75, 0, 100);
+            //Debug.DrawLine(debugInterface, unit.Position, strategy.MovePosition, brown);
 
             if (unit.RemainingSpawnTime == null &&
                 unit.Action == null &&
@@ -129,41 +129,89 @@ public class MyStrategy
             .OrderBy(i => i.DistanceSquaredToMyUnit[unit.Id])
             .FirstOrDefault();
 
-        if (enemy != default)
+        if (enemy == default)
         {
-            bool hit = false;
+            SetRandomState(unit, unitStrategy);
+            return null;
+        }
 
-            Vec2 projectile = unit.Position;
-            Vec2 enemyPosition = enemy.Position;
+        List<MyObstacle> canNotShootObstacles =
+            _context.Obstacles.Values
+                .Where(i => i.CanShootThrough == false)
+                .OrderBy(i => i.DistanceSquaredToMyUnit[unit.Id])
+                .Take(5)
+                .ToList();
 
-            double projectileSpeed = _constants.Weapons[weapon].ProjectileSpeed / _constants.TicksPerSecond;
-            Vec2 projectileV = Calc.VecMultiply(unit.Direction, projectileSpeed);
+        bool hit = false;
+        bool obstacleCollision = false;
+        bool unitCollision = false;
 
-            for (int tick = 1; tick <= _constants.TicksPerSecond - 5; tick++)
+        Vec2 enemyPosition = enemy.Position;
+        Vec2 enemyVelocity = Calc.VecDiv(enemy.Velocity, _constants.TicksPerSecond);
+
+        Vec2 projectile = unit.Position;
+        double projectileSpeed = _constants.Weapons[weapon].ProjectileSpeed / _constants.TicksPerSecond;
+        Vec2 projectileV = Calc.VecMultiply(unit.Direction, projectileSpeed);
+
+        for (int tick = 1; tick <= _constants.TicksPerSecond - 5; tick++)
+        {
+            enemyPosition = Calc.VecAdd(enemyPosition, enemyVelocity);
+
+            var prevProjectile = projectile;
+            projectile = Calc.VecAdd(projectile, projectileV);
+
+            hit = Calc.IntersectCircleLine(prevProjectile, projectile, enemyPosition,
+                _constants.UnitRadius * 2 / projectileSpeed);
+
+            if (hit)
             {
-                var prevProjectile = projectile;
-                projectile = Calc.VecAdd(projectile, projectileV);
+                Debug.DrawLine(debugInterface, prevProjectile, projectile);
+                Debug.DrawCircle(debugInterface, enemyPosition, _constants.UnitRadius);
+                break;
+            }
 
-                hit = Calc.IntersectCircleLine(prevProjectile, projectile, enemyPosition,
-                    _constants.UnitRadius * 8 / projectileSpeed);
+            foreach (var obstacle in canNotShootObstacles)
+            {
+                obstacleCollision = Calc.IntersectCircleLine(
+                    prevProjectile, projectile, obstacle.Position, obstacle.Radius
+                );
 
-                if (hit)
+                if (obstacleCollision)
                 {
-                    Debug.DrawLine(debugInterface, prevProjectile, projectile);
-                    Debug.DrawCircle(debugInterface, enemyPosition, _constants.UnitRadius);
                     break;
                 }
             }
 
-            if (hit)
+            foreach (var myUnit in _context.Units.Values)
             {
-                action = new ActionOrder.Aim(true);
+                if (myUnit.Id == unit.Id || myUnit.RemainingSpawnTime != null)
+                {
+                    continue;
+                }
+
+                unitCollision = Calc.IntersectCircleLine(
+                    prevProjectile, projectile, myUnit.Position, _constants.UnitRadius
+                );
+                if (unitCollision)
+                {
+                    break;
+                }
             }
 
-            unitStrategy.MovePosition = enemy.Position;
-            unitStrategy.State = StrategyState.Hunting;
-            _unitStrategies[unit.Id] = unitStrategy;
+            if (obstacleCollision || unitCollision)
+            {
+                break;
+            }
         }
+
+        if (hit)
+        {
+            action = new ActionOrder.Aim(true);
+        }
+
+        unitStrategy.MovePosition = enemy.Position;
+        unitStrategy.State = StrategyState.Hunting;
+        _unitStrategies[unit.Id] = unitStrategy;
 
         return action;
     }
@@ -273,7 +321,8 @@ public class MyStrategy
         double fullAngle = 360;
         double simAngle = 15; // класс для вычисления лучшей позиции со score
 
-        int simulationTicks = 90;
+        int simulationSec = 3;
+        double secDivider = _constants.TicksPerSecond;
 
         for (int i = 0; i < (fullAngle / simAngle) - 1; i++)
         {
@@ -289,18 +338,21 @@ public class MyStrategy
             var simVec = Calc.Normalize(target);
             var speedModifier = GetSpeedModifier(unit.Direction, simVec);
 
-            double simSpeed = (_constants.MaxUnitForwardSpeed * speedModifier) / _constants.TicksPerSecond;
+            double simSpeed = unit.RemainingSpawnTime != null
+                ? _constants.SpawnMovementSpeed / secDivider
+                : (_constants.MaxUnitForwardSpeed * speedModifier) / secDivider;
+
             simVec = Calc.VecMultiply(simVec, simSpeed);
             simVec = Calc.Rotate(simVec, angle);
 
             int tick = 1;
-            for (; tick <= simulationTicks; tick++)
+            for (; tick <= simulationSec * secDivider; tick++)
             {
                 newPosition = Calc.VecAdd(newPosition, simVec);
 
                 foreach (var projectile in _context.Projectiles.Values)
                 {
-                    var baseProjectileVelocity = Calc.VecDiv(projectile.Velocity, _constants.TicksPerSecond);
+                    var baseProjectileVelocity = Calc.VecDiv(projectile.Velocity, secDivider);
 
                     Vec2 simProjectileVelocity;
                     Vec2 projectilePosition1;
@@ -333,14 +385,14 @@ public class MyStrategy
                     break;
                 }
 
-                double accuracy = _constants.UnitRadius / 5;
+                double accuracy = _constants.UnitRadius / secDivider;
                 bool inPosition = Calc.InsideCircle(newPosition, movePosition, accuracy);
                 if (inPosition)
                 {
                     break;
                 }
 
-                if (tick < _constants.TicksPerSecond / 2)
+                if (tick < secDivider / 2)
                 {
                     foreach (var obstacle in nearestObstacles)
                     {
@@ -351,35 +403,38 @@ public class MyStrategy
                             break;
                         }
                     }
+                }
+
+                if (tick < secDivider)
+                {
+                    foreach (var myUnit in _context.Units.Values)
+                    {
+                        if (myUnit.Id == unit.Id)
+                        {
+                            continue;
+                        }
+
+                        var r = _constants.UnitRadius + _constants.UnitRadius;
+                        unitCollision = Calc.InsideCircle(newPosition, myUnit.Position, r);
+                        if (unitCollision)
+                        {
+                            break;
+                        }
+                    }
+
+                    foreach (var enemy in _context.Enemies.Values)
+                    {
+                        var r = _constants.UnitRadius + _constants.UnitRadius;
+                        unitCollision = Calc.InsideCircle(newPosition, enemy.Position, r);
+                        if (unitCollision)
+                        {
+                            break;
+                        }
+                    }
 
                     inZone = Calc.InsideCircle(
                         newPosition, _context.Zone.CurrentCenter, _context.Zone.CurrentRadius
                     );
-                }
-
-                foreach (var myUnit in _context.Units.Values)
-                {
-                    if (myUnit.Id == unit.Id)
-                    {
-                        continue;
-                    }
-
-                    var r = _constants.UnitRadius + 5 * _constants.UnitRadius;
-                    unitCollision = Calc.InsideCircle(newPosition, myUnit.Position, r);
-                    if (unitCollision)
-                    {
-                        break;
-                    }
-                }
-
-                foreach (var enemy in _context.Enemies.Values)
-                {
-                    var r = _constants.UnitRadius + 5 * _constants.UnitRadius;
-                    unitCollision = Calc.InsideCircle(newPosition, enemy.Position, r);
-                    if (unitCollision)
-                    {
-                        break;
-                    }
                 }
 
                 if (obstacleCollision || unitCollision || !inZone)
@@ -393,7 +448,7 @@ public class MyStrategy
             if (!obstacleCollision && !unitCollision && !hit && inZone)
             {
                 target = simVec;
-                target = Calc.VecMultiply(target, _constants.TicksPerSecond);
+                target = Calc.VecMultiply(target, secDivider);
 
                 var blue = new Color(0, 0, 200, 100);
                 Debug.DrawLine(debugInterface, unit.Position, newPosition, blue);
