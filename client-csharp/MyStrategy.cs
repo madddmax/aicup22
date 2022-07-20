@@ -71,7 +71,7 @@ public class MyStrategy
                 {
                     action = PickUp(MyLootType.StaffAmmo, unit, strategy);
                 }
-                else if (unit.ShieldPotions == 0)
+                else if (unit.ShieldPotions < 3)
                 {
                     action = PickUp(MyLootType.ShieldPotion, unit, strategy);
                 }
@@ -246,13 +246,12 @@ public class MyStrategy
     {
         unitStrategy.State = StrategyState.RandomMove;
         unitStrategy.AreaPickUpIds.Clear();
-        unitStrategy.MovePosition = GerRandomMove(_context.Zone);
+        unitStrategy.MovePosition = GetRandomMove(_context.Zone);
         _unitStrategies[unit.Id] = unitStrategy;
     }
 
-    private static Vec2 GerRandomMove(Zone zone)
+    private static Vec2 GetRandomMove(Zone zone)
     {
-        // todo проблема при маленькой зоне, т.к. еду в зону
         var angle = Random.Next(360);
         var moveX = zone.NextCenter.X + zone.NextRadius * Math.Cos(angle);
         var moveY = zone.NextCenter.Y + zone.NextRadius * Math.Sin(angle);
@@ -280,6 +279,7 @@ public class MyStrategy
 
         if (item == default)
         {
+            SetRandomState(unit, strategy);
             return null;
         }
 
