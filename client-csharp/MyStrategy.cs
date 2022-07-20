@@ -89,7 +89,6 @@ public class MyStrategy
 
                     unitStrategy.MovePosition = enemy.Position;
                     unitStrategy.State = StrategyState.Hunting;
-                    unitStrategy.EnemyId = enemy.Id;
                     _unitStrategies[unit.Id] = unitStrategy;
                 }
             }
@@ -120,22 +119,11 @@ public class MyStrategy
                 }
             }
 
-            var radius = MaxObstaclesRadius + _constants.UnitRadius;
-            bool nearPosition = Calc.InsideCircle(unit.Position, unitStrategy.MovePosition, radius);
-            if (unitStrategy.State == StrategyState.RandomMove && nearPosition)
-            {
-                // todo проблема при маленькой зоне, т.к. еду в зону
-                var angle = Random.Next(360);
-                var moveX = game.Zone.NextCenter.X + game.Zone.NextRadius * Math.Cos(angle);
-                var moveY = game.Zone.NextCenter.Y + game.Zone.NextRadius * Math.Sin(angle);
-                unitStrategy.MovePosition = new Vec2(moveX, moveY);
-                _unitStrategies[unit.Id] = unitStrategy;
-            }
+            RandomMoveIfNeeded(unit, unitStrategy);
 
             var target = Calc.VecDiff(unit.Position, unitStrategy.MovePosition);
             Debug.DrawLine(debugInterface, unit.Position, unitStrategy.MovePosition);
 
-            // todo рэндомить движение при обсчете столкновения + нужно вычислять новую поближе к цели!
             var pathTarget = FindPath(debugInterface, unit, target, unitStrategy.MovePosition);
 
             orders.Add(
@@ -147,13 +135,47 @@ public class MyStrategy
         return new Order(orders);
     }
 
+    private void RandomMoveIfNeeded(MyUnit unit, UnitStrategy unitStrategy)
+    {
+        var radius = MaxObstaclesRadius + _constants.UnitRadius;
+        bool nearRandomPosition = Calc.InsideCircle(unit.Position, unitStrategy.MovePosition, radius);
+        if (unitStrategy.State == StrategyState.RandomMove && nearRandomPosition)
+        {
+            unitStrategy.MovePosition = GerRandomMove(_context.Zone);
+            unitStrategy.AreaPickUpIds.Clear();
+            _unitStrategies[unit.Id] = unitStrategy;
+        }
+
+        bool inZone = Calc.InsideCircle(
+            unitStrategy.MovePosition, _context.Zone.CurrentCenter, _context.Zone.CurrentRadius
+        );
+
+        if (!inZone)
+        {
+            unitStrategy.State = StrategyState.RandomMove;
+            unitStrategy.MovePosition = GerRandomMove(_context.Zone);
+            unitStrategy.AreaPickUpIds.Clear();
+            _unitStrategies[unit.Id] = unitStrategy;
+        }
+    }
+
+    private static Vec2 GerRandomMove(Zone zone)
+    {
+        // todo проблема при маленькой зоне, т.к. еду в зону
+        var angle = Random.Next(360);
+        var moveX = zone.NextCenter.X + zone.NextRadius * Math.Cos(angle);
+        var moveY = zone.NextCenter.Y + zone.NextRadius * Math.Sin(angle);
+
+        return new Vec2(moveX, moveY);
+    }
+
     private ActionOrder PickUp(MyLootType lootType, MyUnit unit, UnitStrategy unitStrategy)
     {
         ActionOrder action = null;
 
         List<int> currentPickedUp = _unitStrategies.Values
             .Where(s => s.UnitId != unit.Id)
-            .Select(s => s.PickupLootId)
+            .SelectMany(s => s.AreaPickUpIds)
             .ToList();
 
         MyLoot item = _context.Items.Values
@@ -171,15 +193,25 @@ public class MyStrategy
             {
                 action = new ActionOrder.Pickup(item.Id);
                 _context.Items.Remove(item.Id);
+
+                unitStrategy.AreaPickUpIds.Clear();
                 unitStrategy.State = StrategyState.RandomMove;
             }
             else
             {
+                foreach (var loot in _context.Items.Values)
+                {
+                    if (Math.Abs(loot.Position.X - item.Position.X) <= 5 &&
+                        Math.Abs(loot.Position.Y - item.Position.Y) <= 5)
+                    {
+                        unitStrategy.AreaPickUpIds.Add(loot.Id);
+                    }
+                }
+
                 unitStrategy.State = StrategyState.PickUp;
             }
 
             unitStrategy.MovePosition = item.Position;
-            unitStrategy.PickupLootId = item.Id;
             _unitStrategies[unit.Id] = unitStrategy;
         }
 
@@ -198,7 +230,6 @@ public class MyStrategy
         double simAngle = 15; // класс для вычисления лучшей позиции со score
 
         int simulationTicks = 90;
-        //double ticksDivider = 10;
 
         for (int i = 0; i < (fullAngle / simAngle) - 1; i++)
         {
