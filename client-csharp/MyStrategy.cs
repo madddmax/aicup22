@@ -405,7 +405,7 @@ public class MyStrategy
 
                     if (!inZone)
                     {
-                        pathResult.Score -= _constants.ZoneDamagePerSecond / ticksPerSecond;
+                        pathResult.Score -= 2;
                     }
                 }
 
@@ -420,10 +420,7 @@ public class MyStrategy
                             break;
                         }
                     }
-                }
 
-                if (tick < ticksPerSecond)
-                {
                     foreach (var myUnit in _context.Units.Values)
                     {
                         if (myUnit.Id == unit.Id)
@@ -438,14 +435,17 @@ public class MyStrategy
                             break;
                         }
                     }
+                }
 
+                if (tick < ticksPerSecond)
+                {
                     foreach (var enemy in _context.Enemies.Values)
                     {
-                        var r = _constants.UnitRadius + _constants.UnitRadius;
-                        unitCollision = Calc.InsideCircle(newPosition, enemy.Position, r);
-                        if (unitCollision)
+                        var r = 10;//_constants.UnitRadius + _constants.UnitRadius;
+                        var enemyCollision = Calc.InsideCircle(newPosition, enemy.Position, r);
+                        if (enemyCollision)
                         {
-                            break;
+                            pathResult.Score -= 0.1;
                         }
                     }
                 }
