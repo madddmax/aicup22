@@ -15,6 +15,7 @@ public class Context
     public readonly Dictionary<int, MyUnit> Enemies = new();
     public readonly Dictionary<int, MyUnit> Units = new();
     public Zone Zone;
+    public int CurrentTick;
 
     public Context(Constants constants)
     {
@@ -29,6 +30,7 @@ public class Context
 
     public void Init(Game game)
     {
+        CurrentTick = game.CurrentTick;
         Zone = game.Zone;
 
         AddOrUpdateUnits(game);

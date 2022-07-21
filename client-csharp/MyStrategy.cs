@@ -44,7 +44,6 @@ public class MyStrategy
                 unit.Action == null &&
                 unit.Weapon is BowWeaponType &&
                 unit.Ammo[unit.Weapon.Value] > 0)
-                // unit.Shield + unit.Health > _constants.UnitHealth)
             {
                 action = Hunting(debugInterface, unit, unit.Weapon.Value, strategy);
             }
@@ -93,7 +92,7 @@ public class MyStrategy
             var target = Calc.VecDiff(unit.Position, strategy.MovePosition);
             Debug.DrawLine(debugInterface, unit.Position, strategy.MovePosition);
 
-            var pathTarget = FindPath(debugInterface, unit, target, strategy.MovePosition);
+            var pathTarget = FindPath(debugInterface, unit, target);
 
             orders.Add(
                 unit.Id,
@@ -159,7 +158,7 @@ public class MyStrategy
             projectile = Calc.VecAdd(projectile, projectileV);
 
             hit = Calc.IntersectCircleLine(prevProjectile, projectile, enemyPosition,
-                _constants.UnitRadius * 2 / projectileSpeed);
+                _constants.UnitRadius / projectileSpeed);
 
             if (hit)
             {
@@ -202,12 +201,12 @@ public class MyStrategy
             }
         }
 
-        if (hit)
+        if (hit && unit.NextShotTick <= _context.CurrentTick)
         {
             action = new ActionOrder.Aim(true);
         }
 
-        unitStrategy.MovePosition = enemy.Position;
+        unitStrategy.MovePosition = enemyPosition;
         unitStrategy.State = StrategyState.Hunting;
         _unitStrategies[unit.Id] = unitStrategy;
 
@@ -224,8 +223,9 @@ public class MyStrategy
             RandomMove(unit, strategy);
         }
 
+        double r = Math.Abs(_context.Zone.CurrentRadius - 2 * _constants.UnitRadius);
         bool inZone = Calc.InsideCircle(
-            strategy.MovePosition, _context.Zone.CurrentCenter, _context.Zone.CurrentRadius
+            strategy.MovePosition, _context.Zone.CurrentCenter, r
         );
         if (!inZone)
         {
@@ -308,7 +308,7 @@ public class MyStrategy
         return action;
     }
 
-    private Vec2 FindPath(DebugInterface debugInterface, MyUnit unit, Vec2 target, Vec2 movePosition)
+    private Vec2 FindPath(DebugInterface debugInterface, MyUnit unit, Vec2 target)
     {
         List<PathResult> pathResults = new List<PathResult>(23);
 
@@ -391,13 +391,18 @@ public class MyStrategy
                             pathResult.Score -= weapon.ProjectileDamage;
                             projectilesToRemove.Add(projectile);
                         }
+
+                        int ticksToRemove = (int)Math.Ceiling(projectile.LifeTime * _constants.TicksPerSecond) + 1;
+                        if (projectile.CurrentTick + ticksToRemove < _context.CurrentTick + tick)
+                        {
+                            projectilesToRemove.Add(projectile);
+                        }
                     }
 
                     foreach (var projectile in projectilesToRemove)
                     {
                         simProjectiles.Remove(projectile);
                     }
-
 
                     bool inZone = Calc.InsideCircle(
                         newPosition, _context.Zone.CurrentCenter, _context.Zone.CurrentRadius
