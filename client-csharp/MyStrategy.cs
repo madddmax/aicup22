@@ -345,10 +345,14 @@ public class MyStrategy
             simVec = Calc.VecMultiply(simVec, simSpeed);
             simVec = Calc.Rotate(simVec, angle);
 
+            Vec2 velocity = Calc.VecDiv(unit.Velocity, secDivider);
+
             int tick = 1;
             for (; tick <= simulationSec * secDivider; tick++)
             {
-                newPosition = Calc.VecAdd(newPosition, simVec);
+                velocity = GetVelocity(velocity, simVec);
+
+                newPosition = Calc.VecAdd(newPosition, velocity);
 
                 foreach (var projectile in _context.Projectiles.Values)
                 {
@@ -478,6 +482,20 @@ public class MyStrategy
         }
 
         return Math.Abs((angleBetween * 0.5 / 180) - 1);
+    }
+
+    private static Vec2 GetVelocity(Vec2 velocity, Vec2 simVec)
+    {
+        double diffLen = Calc.Distance(simVec, velocity);
+        if (diffLen <= 1)
+        {
+            return simVec;
+        }
+
+        Vec2 diff = Calc.VecDiff(simVec, velocity);
+        var acceleration = new Vec2(diff.X / diffLen, diff.Y / diffLen);
+
+        return Calc.VecAdd(velocity, acceleration);
     }
 
     public void DebugUpdate(int displayedTick, DebugInterface debugInterface)
