@@ -91,6 +91,12 @@ public struct MyUnit : IEquatable<MyUnit>
 
     public Dictionary<int, double> DistanceSquaredToMyUnit { get; set; }
 
+    public bool IsSpawn(int gameCurrentTick, double ticksPerSecond)
+    {
+        return RemainingSpawnTime == null ||
+               RemainingSpawnTime.Value * ticksPerSecond < gameCurrentTick - CurrentTick;
+    }
+
     public MyUnit(Unit unit, int currentTick)
     {
         Id = unit.Id;
