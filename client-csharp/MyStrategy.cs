@@ -246,15 +246,28 @@ public class MyStrategy
     {
         unitStrategy.State = StrategyState.RandomMove;
         unitStrategy.AreaPickUpIds.Clear();
-        unitStrategy.MovePosition = GetRandomMove(_context.Zone);
+        unitStrategy.MovePosition = GetRandomMove(_context.Zone, unit);
         _unitStrategies[unit.Id] = unitStrategy;
     }
 
-    private static Vec2 GetRandomMove(Zone zone)
+    private Vec2 GetRandomMove(Zone zone, MyUnit unit)
     {
         var angle = Random.Next(360);
         var moveX = zone.NextCenter.X + zone.NextRadius * Math.Cos(angle);
         var moveY = zone.NextCenter.Y + zone.NextRadius * Math.Sin(angle);
+
+        foreach (var bot in _context.Units.Values)
+        {
+            if (bot.Id == unit.Id)
+            {
+                continue;
+            }
+
+            var r = _constants.FieldOfView / 4;
+            moveX = bot.Position.X + r * Math.Cos(angle);
+            moveY = bot.Position.Y + r * Math.Sin(angle);
+            break;
+        }
 
         return new Vec2(moveX, moveY);
     }
