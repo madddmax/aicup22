@@ -93,7 +93,7 @@ public class MyStrategy
             var target = Calc.VecDiff(unit.Position, strategy.MovePosition);
             Debug.DrawLine(debugInterface, unit.Position, strategy.MovePosition);
 
-            var pathTarget = FindPath(debugInterface, unit, target, strategy.MovePosition);
+            var pathTarget = FindPath(debugInterface, unit, target);
 
             orders.Add(
                 unit.Id,
@@ -225,8 +225,9 @@ public class MyStrategy
             RandomMove(unit, strategy);
         }
 
+        double r = Math.Abs(_context.Zone.CurrentRadius - 2 * _constants.UnitRadius);
         bool inZone = Calc.InsideCircle(
-            strategy.MovePosition, _context.Zone.CurrentCenter, _context.Zone.CurrentRadius
+            strategy.MovePosition, _context.Zone.CurrentCenter, r
         );
         if (!inZone)
         {
@@ -309,7 +310,7 @@ public class MyStrategy
         return action;
     }
 
-    private Vec2 FindPath(DebugInterface debugInterface, MyUnit unit, Vec2 target, Vec2 movePosition)
+    private Vec2 FindPath(DebugInterface debugInterface, MyUnit unit, Vec2 target)
     {
         List<PathResult> pathResults = new List<PathResult>(23);
 
@@ -320,7 +321,7 @@ public class MyStrategy
                 .ToList();
 
         double fullAngle = 360;
-        double simAngle = 15; // класс для вычисления лучшей позиции со score
+        double simAngle = 15;
 
         int simulationSec = 3;
         double ticksPerSecond = _constants.TicksPerSecond;
@@ -392,13 +393,18 @@ public class MyStrategy
                             pathResult.Score -= weapon.ProjectileDamage;
                             projectilesToRemove.Add(projectile);
                         }
+
+                        int ticksToRemove = (int)Math.Ceiling(projectile.LifeTime * _constants.TicksPerSecond) + 1;
+                        if (projectile.CurrentTick + ticksToRemove < _context.CurrentTick + tick)
+                        {
+                            projectilesToRemove.Add(projectile);
+                        }
                     }
 
                     foreach (var projectile in projectilesToRemove)
                     {
                         simProjectiles.Remove(projectile);
                     }
-
 
                     bool inZone = Calc.InsideCircle(
                         newPosition, _context.Zone.CurrentCenter, _context.Zone.CurrentRadius
