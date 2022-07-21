@@ -56,19 +56,19 @@ public class MyStrategy
                 SetRandomState(unit, strategy);
             }
 
-            if (strategy.State != StrategyState.Hunting &&
-                unit.RemainingSpawnTime == null)
+            if (strategy.State != StrategyState.Hunting)// &&
+                // unit.RemainingSpawnTime == null)
             {
                 if (unit.Weapon is not BowWeaponType)
                 {
                     action = PickUp(MyLootType.Bow, unit, strategy);
                 }
                 else if (unit.Weapon is BowWeaponType &&
-                         unit.Ammo[unit.Weapon.Value] < _constants.Weapons[unit.Weapon.Value].MaxInventoryAmmo / 2)
+                         unit.Ammo[unit.Weapon.Value] < _constants.Weapons[unit.Weapon.Value].MaxInventoryAmmo / 3)
                 {
                     action = PickUp(MyLootType.BowAmmo, unit, strategy);
                 }
-                else if (unit.ShieldPotions < 3)
+                else if (unit.ShieldPotions == 0)
                 {
                     action = PickUp(MyLootType.ShieldPotion, unit, strategy);
                 }
@@ -123,6 +123,7 @@ public class MyStrategy
         ActionOrder action = null;
 
         MyUnit enemy = _context.Enemies.Values
+            .Where(i => i.IsSpawn(_context.CurrentTick, _constants.TicksPerSecond))
             .OrderBy(i => i.DistanceSquaredToMyUnit[unit.Id])
             .FirstOrDefault();
 
@@ -410,7 +411,7 @@ public class MyStrategy
 
                     if (!inZone)
                     {
-                        pathResult.Score -= 2;
+                        pathResult.Score -= 5;
                     }
                 }
 

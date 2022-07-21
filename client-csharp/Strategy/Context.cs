@@ -44,7 +44,7 @@ public class Context
 
     private void AddOrUpdateUnits(Game game)
     {
-        RemoveEnemyUnits();
+        RemoveEnemyUnits(game);
         RemoveUnits(game);
 
         foreach (Unit unit in game.Units)
@@ -52,10 +52,7 @@ public class Context
             var bot = new MyUnit(unit, game.CurrentTick);
             if (bot.PlayerId != game.MyId)
             {
-                if (bot.RemainingSpawnTime == null)
-                {
-                    Enemies[bot.Id] = bot;
-                }
+                Enemies[bot.Id] = bot;
             }
             else
             {
@@ -68,7 +65,9 @@ public class Context
             foreach (var unit in Units.Values)
             {
                 var distanceSquaredToMyUnit = Calc.DistanceSquared(enemy.Position, unit.Position);
-                enemy.DistanceSquaredToMyUnit[unit.Id] = distanceSquaredToMyUnit;
+                enemy.DistanceSquaredToMyUnit[unit.Id] = enemy.Health + enemy.Shield < 100
+                    ? distanceSquaredToMyUnit / 2
+                    : distanceSquaredToMyUnit;
             }
 
             Enemies[enemy.Id] = enemy;
@@ -91,23 +90,53 @@ public class Context
         }
     }
 
-    private void RemoveEnemyUnits()
+    private void RemoveEnemyUnits(Game game)
     {
-        Enemies.Clear();
+        var removedEnemyUnits = new List<int>();
+        foreach (var enemy in Enemies.Values)
+        {
+            if (CurrentTick - enemy.CurrentTick >= 10 * _constants.TicksPerSecond &&
+                !removedEnemyUnits.Contains(enemy.Id))
+            {
+                removedEnemyUnits.Add(enemy.Id);
+            }
+
+            foreach (var unit in Units.Values)
+            {
+                var directionVec = Calc.VecMultiply(unit.Direction, _constants.ViewDistance);
+
+                bool isInSector = Calc.IsInSector(directionVec, Calc.VecDiff(unit.Position, enemy.Position),
+                    _constants.FieldOfView);
+
+                if (isInSector)
+                {
+                    bool disappeared = game.Units.All(i => i.Id != enemy.Id);
+                    if (disappeared && !removedEnemyUnits.Contains(enemy.Id))
+                    {
+                        removedEnemyUnits.Add(enemy.Id);
+                    }
+                }
+            }
+        }
+
+        foreach (var removedId in removedEnemyUnits)
+        {
+            Enemies.Remove(removedId);
+        }
     }
 
     private void RemoveUnits(Game game)
     {
-        var removedItems = new List<int>();
+        var removedUnits = new List<int>();
         foreach (var unit in Units.Values)
         {
             if (game.Units.All(u => u.Id != unit.Id))
             {
-                removedItems.Add(unit.Id);
+                removedUnits.Add(unit.Id);
             }
         }
 
-        foreach (var removedId in removedItems)
+        foreach (var removedId in removedUnits)
         {
             Units.Remove(removedId);
         }
