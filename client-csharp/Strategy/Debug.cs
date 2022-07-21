@@ -12,14 +12,14 @@ public static class Debug
         DrawLine(debugInterface, p1, p2, new Color(0, 0, 0, 50));
     }
 
-    public static void DrawLine(DebugInterface debugInterface, Vec2 p1, Vec2 p2, Color color)
+    public static void DrawLine(DebugInterface debugInterface, Vec2 p1, Vec2 p2, Color color, double width = 0.1)
     {
         if (ReleaseMode)
         {
             return;
         }
 
-        debugInterface.AddPolyLine(new[] {p1, p2}, 0.1, color);
+        debugInterface.AddPolyLine(new[] {p1, p2}, width, color);
     }
 
     public static void DrawText(DebugInterface debugInterface, Vec2 p, string text)

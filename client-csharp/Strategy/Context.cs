@@ -50,8 +50,7 @@ public class Context
             var bot = new MyUnit(unit, game.CurrentTick);
             if (bot.PlayerId != game.MyId)
             {
-                if (bot.RemainingSpawnTime == null ||
-                    bot.RemainingSpawnTime.Value * _constants.TicksPerSecond < 5)
+                if (bot.RemainingSpawnTime == null)
                 {
                     Enemies[bot.Id] = bot;
                 }
@@ -148,7 +147,7 @@ public class Context
 
             // todo collision with obstacles
             myProjectile.Position = Calc.VecAdd(myProjectile.Position, myProjectile.Velocity);
-            int ticksToRemove = (int)Math.Ceiling(myProjectile.LifeTime * _constants.TicksPerSecond);
+            int ticksToRemove = (int)Math.Ceiling(myProjectile.LifeTime * _constants.TicksPerSecond) + 5;
             if (projectile.CurrentTick + ticksToRemove >= game.CurrentTick)
             {
                 Projectiles[projectile.Id] = myProjectile;
