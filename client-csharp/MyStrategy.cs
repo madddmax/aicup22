@@ -9,11 +9,6 @@ namespace AiCup22;
 
 public class MyStrategy
 {
-    private const int WandWeaponType = 0;
-    private const int StaffWeaponType = 1;
-    private const int BowWeaponType = 2;
-
-    private const double MaxObstaclesRadius = 6;
     private static readonly Random Random = new();
 
     private readonly Constants _constants;
@@ -42,7 +37,7 @@ public class MyStrategy
 
             if (unit.RemainingSpawnTime == null &&
                 unit.Action == null &&
-                unit.Weapon is BowWeaponType &&
+                unit.Weapon is Context.BowWeaponType &&
                 unit.Ammo[unit.Weapon.Value] > 0)
                 // unit.Shield + unit.Health > _constants.UnitHealth)
             {
@@ -60,11 +55,11 @@ public class MyStrategy
             if (strategy.State != StrategyState.Hunting)// &&
                 // unit.RemainingSpawnTime == null)
             {
-                if (unit.Weapon is not BowWeaponType)
+                if (unit.Weapon is not Context.BowWeaponType)
                 {
                     action = PickUp(MyLootType.Bow, unit, strategy);
                 }
-                else if (unit.Weapon is BowWeaponType &&
+                else if (unit.Weapon is Context.BowWeaponType &&
                          unit.Ammo[unit.Weapon.Value] < _constants.Weapons[unit.Weapon.Value].MaxInventoryAmmo / 3)
                 {
                     action = PickUp(MyLootType.BowAmmo, unit, strategy);
@@ -217,7 +212,7 @@ public class MyStrategy
 
     private void RandomMoveIfNeeded(MyUnit unit, UnitStrategy strategy)
     {
-        var radius = MaxObstaclesRadius + _constants.UnitRadius;
+        var radius = Context.MaxObstaclesRadius + _constants.UnitRadius;
         bool nearRandomPosition = Calc.InsideCircle(unit.Position, strategy.MovePosition, radius);
         if ((strategy.MovePosition.X == 0 && strategy.MovePosition.Y == 0) ||
             (strategy.State == StrategyState.RandomMove && nearRandomPosition))
@@ -281,6 +276,9 @@ public class MyStrategy
             .SelectMany(s => s.AreaPickUpIds)
             .ToList();
 
+        currentPickedUp.AddRange(_context.Enemies.Values.SelectMany(s => s.AreaPickUpIds));
+        currentPickedUp = currentPickedUp.Distinct().ToList();
+
         MyLoot item = _context.Items.Values
             .Where(i =>
                 i.InZone &&
@@ -307,9 +305,8 @@ public class MyStrategy
         {
             foreach (var loot in _context.Items.Values)
             {
-                const double pickUpArea = 15;
-                if (Math.Abs(loot.Position.X - item.Position.X) <= pickUpArea &&
-                    Math.Abs(loot.Position.Y - item.Position.Y) <= pickUpArea)
+                if (Math.Abs(loot.Position.X - item.Position.X) <= _context.AreaPickUp &&
+                    Math.Abs(loot.Position.Y - item.Position.Y) <= _context.AreaPickUp)
                 {
                     strategy.AreaPickUpIds.Add(loot.Id);
                 }

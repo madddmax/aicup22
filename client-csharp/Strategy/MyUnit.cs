@@ -91,6 +91,8 @@ public struct MyUnit : IEquatable<MyUnit>
 
     public Dictionary<int, double> DistanceSquaredToMyUnit { get; set; }
 
+    public List<int> AreaPickUpIds { get; set; }
+
     public bool IsSpawn(int gameCurrentTick, double ticksPerSecond)
     {
         return RemainingSpawnTime == null ||
@@ -118,6 +120,7 @@ public struct MyUnit : IEquatable<MyUnit>
 
         CurrentTick = currentTick;
         DistanceSquaredToMyUnit = new Dictionary<int, double>();
+        AreaPickUpIds = new List<int>();
     }
 
     public bool Equals(MyUnit other)

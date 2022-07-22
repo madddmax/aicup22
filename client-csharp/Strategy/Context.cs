@@ -7,6 +7,13 @@ namespace AiCup22.Strategy;
 
 public class Context
 {
+    public const int WandWeaponType = 0;
+    public const int StaffWeaponType = 1;
+    public const int BowWeaponType = 2;
+
+    public const double MaxObstaclesRadius = 6;
+    public int AreaPickUp = 15;
+
     private readonly Constants _constants;
 
     public readonly Dictionary<int, MyLoot> Items = new();
@@ -65,9 +72,32 @@ public class Context
             foreach (var unit in Units.Values)
             {
                 var distanceSquaredToMyUnit = Calc.DistanceSquared(enemy.Position, unit.Position);
-                enemy.DistanceSquaredToMyUnit[unit.Id] = enemy.Health + enemy.Shield < 100
+
+                distanceSquaredToMyUnit = enemy.Weapon is StaffWeaponType &&
+                                          enemy.Ammo[StaffWeaponType] > 0
                     ? distanceSquaredToMyUnit / 2
                     : distanceSquaredToMyUnit;
+
+                distanceSquaredToMyUnit = enemy.Weapon is BowWeaponType &&
+                                          enemy.Ammo[BowWeaponType] > 0
+                    ? distanceSquaredToMyUnit / 4
+                    : distanceSquaredToMyUnit;
+
+                distanceSquaredToMyUnit = enemy.Health + enemy.Shield <= 100
+                    ? distanceSquaredToMyUnit / 4
+                    : distanceSquaredToMyUnit;
+
+                enemy.DistanceSquaredToMyUnit[unit.Id] = distanceSquaredToMyUnit;
+            }
+
+            enemy.AreaPickUpIds.Clear();
+            foreach (var item in Items.Values)
+            {
+                if (Math.Abs(enemy.Position.X - item.Position.X) <= AreaPickUp &&
+                    Math.Abs(enemy.Position.Y - item.Position.Y) <= AreaPickUp)
+                {
+                    enemy.AreaPickUpIds.Add(item.Id);
+                }
             }
 
             Enemies[enemy.Id] = enemy;
@@ -95,7 +125,7 @@ public class Context
         var removedEnemyUnits = new List<int>();
         foreach (var enemy in Enemies.Values)
         {
-            if (CurrentTick - enemy.CurrentTick >= 10 * _constants.TicksPerSecond &&
+            if (CurrentTick - enemy.CurrentTick >= 20 * _constants.TicksPerSecond &&
                 !removedEnemyUnits.Contains(enemy.Id))
             {
                 removedEnemyUnits.Add(enemy.Id);
